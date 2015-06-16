@@ -28,6 +28,7 @@ import org.wso2.carbon.identity.application.common.model.ServiceProvider;
 import org.wso2.carbon.identity.application.mgt.ApplicationManagementService;
 import org.wso2.carbon.identity.application.mgt.ApplicationManagementServiceImpl;
 import org.wso2.carbon.identity.application.mgt.ApplicationMgtSystemConfig;
+import org.wso2.carbon.identity.saml.metadata.SAMLSSOMetadataConfigService;
 import org.wso2.carbon.registry.core.service.RegistryService;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.utils.CarbonUtils;
@@ -54,6 +55,9 @@ import java.util.Map;
  * cardinality="1..1" policy="dynamic"
  * bind="setConfigurationContextService"
  * unbind="unsetConfigurationContextService"
+ * @scr.reference name="metadata.SAMLSSOMetadataConfigService" interface="org.wso2.carbon.identity.saml.metadata.SAMLSSOMetadataConfigService"
+ * cardinality="1..1" policy="dynamic" bind="setSAMLSSOMetadataConfigService"
+ * unbind="unsetSAMLSSOMetadataConfigService"
  */
 public class ApplicationManagementServiceComponent {
     private static Log log = LogFactory.getLog(ApplicationManagementServiceComponent.class);
@@ -159,6 +163,20 @@ public class ApplicationManagementServiceComponent {
                 }
             }
         }
+    }
+
+    protected void setSAMLSSOMetadataConfigService(SAMLSSOMetadataConfigService samlssoMetadataConfigService){
+        if (log.isDebugEnabled()) {
+            log.debug("SAML SSO Metadata Config Service is set in the SAML SSO bundle");
+        }
+        ApplicationManagementServiceComponentHolder.getInstance().setSamlssoMetadataConfigService(samlssoMetadataConfigService);
+    }
+
+    protected void unsetSAMLSSOMetadataConfigService(SAMLSSOMetadataConfigService samlssoMetadataConfigService){
+        if (log.isDebugEnabled()) {
+            log.debug("SAML SSO Metadata Config Service is unset in the SAML SSO bundle");
+        }
+        ApplicationManagementServiceComponentHolder.getInstance().setSamlssoMetadataConfigService(null);
     }
 
 }

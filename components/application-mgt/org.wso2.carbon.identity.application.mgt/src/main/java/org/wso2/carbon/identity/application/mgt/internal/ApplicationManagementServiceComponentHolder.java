@@ -17,6 +17,7 @@
  */
 package org.wso2.carbon.identity.application.mgt.internal;
 
+import org.wso2.carbon.identity.saml.metadata.SAMLSSOMetadataConfigService;
 import org.wso2.carbon.registry.api.RegistryService;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.utils.ConfigurationContextService;
@@ -31,6 +32,8 @@ public class ApplicationManagementServiceComponentHolder {
     private RealmService realmService;
 
     private ConfigurationContextService configContextService;
+
+    private SAMLSSOMetadataConfigService samlssoMetadataConfigService;
 
     private ApplicationManagementServiceComponentHolder(){
     }
@@ -60,6 +63,14 @@ public class ApplicationManagementServiceComponentHolder {
     public void setConfigContextService(
             ConfigurationContextService configContextService) {
         this.configContextService = configContextService;
+    }
+
+    public SAMLSSOMetadataConfigService getSamlssoMetadataConfigService() {
+        return samlssoMetadataConfigService;
+    }
+
+    public void setSamlssoMetadataConfigService(SAMLSSOMetadataConfigService samlssoMetadataConfigService) {
+        this.samlssoMetadataConfigService = samlssoMetadataConfigService;
     }
 
 

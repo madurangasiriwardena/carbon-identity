@@ -100,7 +100,7 @@ public class SAMLSSOConfigAdmin {
         SAMLSSOMetadataConfigService samlssoMetadataConfigService = SAMLSSOUtil.getSamlssoMetadataConfigService();
 
         try {
-            org.wso2.carbon.identity.saml.metadata.model.SAMLSSOServiceProviderDO serviceProviderDO = samlssoMetadataConfigService.uploadServiceProvider(registry, metadata);
+            SAMLSSOServiceProviderDO serviceProviderDO = samlssoMetadataConfigService.uploadServiceProvider(registry, metadata);
 
             return createSAMLSSOServiceProviderDTO(serviceProviderDO);
         } catch (IdentityException e) {

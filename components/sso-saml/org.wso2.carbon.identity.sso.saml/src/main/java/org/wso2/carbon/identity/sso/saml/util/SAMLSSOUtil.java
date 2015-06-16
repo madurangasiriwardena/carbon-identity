@@ -64,7 +64,7 @@ import org.wso2.carbon.identity.application.common.model.SAML2SSOFederatedAuthen
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.base.IdentityException;
-import org.wso2.carbon.identity.core.model.SAMLSSOServiceProviderDO;
+import org.wso2.carbon.identity.saml.metadata.model.SAMLSSOServiceProviderDO;
 import org.wso2.carbon.identity.core.persistence.IdentityPersistenceManager;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.saml.metadata.SAMLSSOMetadataConfigService;
@@ -789,8 +789,6 @@ public class SAMLSSOUtil {
      * @param logoutRequest
      * @param alias
      * @param subject
-     * @param httpRequest
-     * @param isHTTPRedirectBinding
      * @return
      */
     public static boolean validateLogoutRequestSignature(LogoutRequest logoutRequest, String alias,
@@ -807,8 +805,8 @@ public class SAMLSSOUtil {
     /**
      * Signature validation for HTTP Redirect Binding
      *
-     * @param authnReqDTO
-     * @param samlRequest
+     * @param queryString
+     * @param issuer
      * @param alias
      * @param domainName
      * @return
@@ -914,12 +912,11 @@ public class SAMLSSOUtil {
         SAMLSSOServiceProviderDO spDO = spConfigManager.getServiceProvider(authnReqDTO.getIssuer());
 
         if (spDO == null) {
-            IdentityPersistenceManager persistenceManager =
-                    IdentityPersistenceManager.getPersistanceManager();
+            SAMLSSOMetadataConfigService samlssoMetadataConfigService = SAMLSSOUtil.getSamlssoMetadataConfigService();
 
             Registry registry = (Registry) PrivilegedCarbonContext.getThreadLocalCarbonContext().
                     getRegistry(RegistryType.SYSTEM_CONFIGURATION);
-            spDO = persistenceManager.getServiceProvider(registry, authnReqDTO.getIssuer());
+            spDO = samlssoMetadataConfigService.getServiceProvider(registry, authnReqDTO.getIssuer());
         }
 
         if (!authnReqDTO.isIdPInitSSO()) {

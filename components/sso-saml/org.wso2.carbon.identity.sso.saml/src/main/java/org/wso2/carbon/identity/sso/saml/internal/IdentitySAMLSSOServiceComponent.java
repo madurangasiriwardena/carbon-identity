@@ -62,6 +62,9 @@ import java.util.Scanner;
  * @scr.reference name="osgi.httpservice" interface="org.osgi.service.http.HttpService"
  * cardinality="1..1" policy="dynamic" bind="setHttpService"
  * unbind="unsetHttpService"
+ * @scr.reference name="metadata.SAMLSSOMetadataConfigService" interface="org.wso2.carbon.identity.saml.metadata.SAMLSSOMetadataConfigService"
+ * cardinality="1..1" policy="dynamic" bind="setSAMLSSOMetadataConfigService"
+ * unbind="unsetSAMLSSOMetadataConfigService"
  */
 public class IdentitySAMLSSOServiceComponent {
 

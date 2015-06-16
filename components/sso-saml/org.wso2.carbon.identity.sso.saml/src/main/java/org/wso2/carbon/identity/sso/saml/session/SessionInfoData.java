@@ -17,7 +17,7 @@
  */
 package org.wso2.carbon.identity.sso.saml.session;
 
-import org.wso2.carbon.identity.core.model.SAMLSSOServiceProviderDO;
+import org.wso2.carbon.identity.saml.metadata.model.SAMLSSOServiceProviderDO;
 
 import java.io.Serializable;
 import java.util.Map;

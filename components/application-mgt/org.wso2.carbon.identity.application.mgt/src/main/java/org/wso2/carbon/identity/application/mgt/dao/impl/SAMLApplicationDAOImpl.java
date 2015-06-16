@@ -24,8 +24,10 @@ import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.context.RegistryType;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
 import org.wso2.carbon.identity.application.mgt.dao.SAMLApplicationDAO;
+import org.wso2.carbon.identity.application.mgt.internal.ApplicationManagementServiceComponentHolder;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.persistence.IdentityPersistenceManager;
+import org.wso2.carbon.identity.saml.metadata.SAMLSSOMetadataConfigService;
 import org.wso2.carbon.registry.core.Registry;
 
 public class SAMLApplicationDAOImpl implements SAMLApplicationDAO {
@@ -35,10 +37,11 @@ public class SAMLApplicationDAOImpl implements SAMLApplicationDAO {
     @Override
     public void removeServiceProviderConfiguration(String issuer) throws IdentityApplicationManagementException {
         try {
-            IdentityPersistenceManager persistenceManager = IdentityPersistenceManager.getPersistanceManager();
+            SAMLSSOMetadataConfigService samlssoMetadataConfigService =
+                    ApplicationManagementServiceComponentHolder.getInstance().getSamlssoMetadataConfigService();
             Registry configSystemRegistry = (Registry) PrivilegedCarbonContext.getThreadLocalCarbonContext().
                     getRegistry(RegistryType.SYSTEM_CONFIGURATION);
-            persistenceManager.removeServiceProvider(configSystemRegistry, issuer);
+            samlssoMetadataConfigService.removeServiceProvider(configSystemRegistry, issuer);
         } catch (IdentityException e) {
             log.error("Erro while deleting the issuer", e);
             throw new IdentityApplicationManagementException("Error while deleting SAML issuer " + e.getMessage());
