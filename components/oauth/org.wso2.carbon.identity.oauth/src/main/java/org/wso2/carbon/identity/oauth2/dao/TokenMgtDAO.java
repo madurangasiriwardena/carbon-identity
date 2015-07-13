@@ -22,6 +22,7 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.application.common.model.User;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.persistence.JDBCPersistenceManager;
 import org.wso2.carbon.identity.core.util.IdentityDatabaseUtil;
@@ -35,6 +36,7 @@ import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.model.RefreshTokenValidationDataDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.sql.Connection;
 import java.sql.DataTruncation;
@@ -157,10 +159,12 @@ public class TokenMgtDAO {
             prepStmt.setString(2, persistenceProcessor.getProcessedClientId(consumerKey));
             prepStmt.setString(3, callbackUrl);
             prepStmt.setString(4, OAuth2Util.buildScopeString(authzCodeDO.getScope()));
-            prepStmt.setString(5, authzCodeDO.getAuthorizedUser());
-            prepStmt.setTimestamp(6, authzCodeDO.getIssuedTime(),
+            prepStmt.setString(5, authzCodeDO.getAuthorizedUser().getUserName());
+            prepStmt.setString(6, authzCodeDO.getAuthorizedUser().getUserStoreDomain());
+            prepStmt.setString(7, authzCodeDO.getAuthorizedUser().getTenantDomain());
+            prepStmt.setTimestamp(8, authzCodeDO.getIssuedTime(),
                                   Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-            prepStmt.setLong(7, authzCodeDO.getValidityPeriod());
+            prepStmt.setLong(9, authzCodeDO.getValidityPeriod());
             prepStmt.execute();
             connection.commit();
         } catch (IdentityException e) {
@@ -205,16 +209,18 @@ public class TokenMgtDAO {
                 prepStmt.setString(2, accessTokenDO.getRefreshToken());
             }
             prepStmt.setString(3, persistenceProcessor.getProcessedClientId(consumerKey));
-            prepStmt.setString(4, accessTokenDO.getAuthzUser());
-            prepStmt.setTimestamp(5, accessTokenDO.getIssuedTime(), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-            prepStmt.setTimestamp(6, accessTokenDO.getRefreshTokenIssuedTime(), Calendar.getInstance(TimeZone
+            prepStmt.setString(4, accessTokenDO.getAuthzUser().getUserName());
+            prepStmt.setString(5, accessTokenDO.getAuthzUser().getTenantDomain());
+            prepStmt.setString(6, accessTokenDO.getAuthzUser().getUserStoreDomain());
+            prepStmt.setTimestamp(7, accessTokenDO.getIssuedTime(), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+            prepStmt.setTimestamp(8, accessTokenDO.getRefreshTokenIssuedTime(), Calendar.getInstance(TimeZone
                     .getTimeZone("UTC")));
-            prepStmt.setLong(7, accessTokenDO.getValidityPeriodInMillis());
-            prepStmt.setLong(8, accessTokenDO.getRefreshTokenValidityPeriodInMillis());
-            prepStmt.setString(9, OAuth2Util.hashScopes(accessTokenDO.getScope()));
-            prepStmt.setString(10, accessTokenDO.getTokenState());
-            prepStmt.setString(11, accessTokenDO.getTokenType());
-            prepStmt.setString(12, accessTokenDO.getTokenId());
+            prepStmt.setLong(9, accessTokenDO.getValidityPeriodInMillis());
+            prepStmt.setLong(10, accessTokenDO.getRefreshTokenValidityPeriodInMillis());
+            prepStmt.setString(11, OAuth2Util.hashScopes(accessTokenDO.getScope()));
+            prepStmt.setString(12, accessTokenDO.getTokenState());
+            prepStmt.setString(13, accessTokenDO.getTokenType());
+            prepStmt.setString(14, accessTokenDO.getTokenId());
             prepStmt.execute();
             String accessTokenId = accessTokenDO.getTokenId();
             prepStmt = connection.prepareStatement(sqlAddScopes);
@@ -307,6 +313,9 @@ public class TokenMgtDAO {
         }
 
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
+        String tenantDomain = MultitenantUtils.getTenantDomain(userName);
+        String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
+        String userDomain = OAuth2Util.getDomainFromName(userName);
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
@@ -347,13 +356,15 @@ public class TokenMgtDAO {
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
             if (isUsernameCaseSensitive) {
-                prepStmt.setString(2, userName);
+                prepStmt.setString(2, tenantAwareUsername);
             } else {
-                prepStmt.setString(2, userName.toLowerCase());
+                prepStmt.setString(2, tenantAwareUsername.toLowerCase());
             }
+            prepStmt.setString(3, tenantDomain);
+            prepStmt.setString(4, userDomain);
 
             if (hashedScope != null) {
-                prepStmt.setString(3, hashedScope);
+                prepStmt.setString(5, hashedScope);
             }
 
             resultSet = prepStmt.executeQuery();
@@ -389,7 +400,11 @@ public class TokenMgtDAO {
                     String userType = resultSet.getString(8);
                     String tokenId = resultSet.getString(9);
                     // data loss at dividing the validity period but can be neglected
-                    AccessTokenDO accessTokenDO = new AccessTokenDO(consumerKey, userName, OAuth2Util.buildScopeArray
+                    User user = new User();
+                    user.setUserName(tenantAwareUsername);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userDomain);
+                    AccessTokenDO accessTokenDO = new AccessTokenDO(consumerKey, user, OAuth2Util.buildScopeArray
                             (scope), new Timestamp(issuedTime), new Timestamp(refreshTokenIssuedTime)
                             , validityPeriodInMillis, refreshTokenValidityPeriodInMillis, userType);
                     accessTokenDO.setAccessToken(accessToken);
@@ -426,6 +441,9 @@ public class TokenMgtDAO {
         }
 
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
+        String tenantDomain = MultitenantUtils.getTenantDomain(userName);
+        String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
+        String userDomain = OAuth2Util.getDomainFromName(userName);
 
         PreparedStatement prepStmt = null;
         Map<String, AccessTokenDO> accessTokenDOMap = new HashMap<>();
@@ -444,10 +462,12 @@ public class TokenMgtDAO {
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
             if (isUsernameCaseSensitive) {
-                prepStmt.setString(2, userName);
+                prepStmt.setString(2, tenantAwareUsername);
             } else {
-                prepStmt.setString(2, userName.toLowerCase());
+                prepStmt.setString(2, tenantAwareUsername.toLowerCase());
             }
+            prepStmt.setString(3, tenantDomain);
+            prepStmt.setString(4, userDomain);
             ResultSet resultSet = prepStmt.executeQuery();
 
             while (resultSet.next()) {
@@ -465,7 +485,11 @@ public class TokenMgtDAO {
                     String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(8));
                     String tokenId = resultSet.getString(9);
 
-                    AccessTokenDO dataDO = new AccessTokenDO(consumerKey, userName, scope, issuedTime,
+                    User user = new User();
+                    user.setUserName(tenantAwareUsername);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userStoreDomain);
+                    AccessTokenDO dataDO = new AccessTokenDO(consumerKey, user, scope, issuedTime,
                             refreshTokenIssuedTime, validityPeriodInMillis,
                             refreshTokenValidityPeriodMillis, tokenType);
                     dataDO.setAccessToken(accessToken);
@@ -513,13 +537,20 @@ public class TokenMgtDAO {
             if (resultSet.next()) {
                 if (resultSet.getString(6).equals(OAuthConstants.AuthorizationCodeState.ACTIVE)) {
                     String authorizedUser = resultSet.getString(1);
-                    String scopeString = resultSet.getString(2);
-                    String callbackUrl = resultSet.getString(3);
-                    Timestamp issuedTime = resultSet.getTimestamp(4,
-                                                                  Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-                    long validityPeriod = resultSet.getLong(5);
+                    String userstoreDomain = resultSet.getString(2);
+                    String tenantDomain = resultSet.getString(3);
+                    String scopeString = resultSet.getString(4);
+                    String callbackUrl = resultSet.getString(5);
+                    Timestamp issuedTime = resultSet.getTimestamp(6,
+                            Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+                    long validityPeriod = resultSet.getLong(7);
 
-                    return new AuthzCodeDO(authorizedUser,
+                    User user = new User();
+                    user.setUserName(authorizedUser);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userstoreDomain);
+
+                    return new AuthzCodeDO(user,
                                            OAuth2Util.buildScopeArray(scopeString),
                                            issuedTime, validityPeriod, callbackUrl);
                 } else {
@@ -778,17 +809,23 @@ public class TokenMgtDAO {
                 if (iterateId == 0) {
                     String consumerKey = persistenceProcessor.getPreprocessedClientId(resultSet.getString(1));
                     String authorizedUser = resultSet.getString(2);
-                    String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(3));
-                    Timestamp issuedTime = resultSet.getTimestamp(4,
+                    String tenantDomain = resultSet.getString(3);
+                    String userDomain = resultSet.getString(4);
+                    String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(5));
+                    Timestamp issuedTime = resultSet.getTimestamp(6,
                             Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-                    Timestamp refreshTokenIssuedTime = resultSet.getTimestamp(5,
+                    Timestamp refreshTokenIssuedTime = resultSet.getTimestamp(7,
                             Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-                    long validityPeriodInMillis = resultSet.getLong(6);
-                    long refreshTokenValidityPeriodMillis = resultSet.getLong(7);
-                    String tokenType = resultSet.getString(8);
-                    String refreshToken = resultSet.getString(9);
-                    String tokenId = resultSet.getString(10);
-                    dataDO = new AccessTokenDO(consumerKey, authorizedUser, scope, issuedTime, refreshTokenIssuedTime,
+                    long validityPeriodInMillis = resultSet.getLong(8);
+                    long refreshTokenValidityPeriodMillis = resultSet.getLong(9);
+                    String tokenType = resultSet.getString(10);
+                    String refreshToken = resultSet.getString(11);
+                    String tokenId = resultSet.getString(12);
+                    User user = new User();
+                    user.setUserName(authorizedUser);
+                    user.setUserStoreDomain(userDomain);
+                    user.setTenantDomain(tenantDomain);
+                    dataDO = new AccessTokenDO(consumerKey, user, scope, issuedTime, refreshTokenIssuedTime,
                             validityPeriodInMillis, refreshTokenValidityPeriodMillis, tokenType);
                     dataDO.setAccessToken(accessTokenIdentifier);
                     dataDO.setRefreshToken(refreshToken);

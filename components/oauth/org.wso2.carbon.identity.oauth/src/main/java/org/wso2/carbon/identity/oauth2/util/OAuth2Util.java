@@ -559,7 +559,7 @@ public class OAuth2Util {
         return isUsernameCaseSensitive;
     }
 
-    private static String getDomainFromName(String name) {
+    public static String getDomainFromName(String name) {
         int index;
         if ((index = name.indexOf("/")) > 0) {
             String domain = name.substring(0, index);
