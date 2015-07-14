@@ -47,9 +47,6 @@ public class CSVUserBulkImport {
         try {
             CSVReader csvReader = new CSVReader(reader, ',', '"', 1);
             String password = config.getDefaultPassword();
-            if (password == null){
-                password = "";
-            }
             String[] line = csvReader.readNext();
             boolean isDuplicate = false;
             boolean fail = false;
@@ -89,7 +86,6 @@ public class CSVUserBulkImport {
                             log.error("User import unsuccessful - Username : " + userName + " - Error: Duplicate user");
                         }
                     } catch (UserStoreException e) {
-
                         //this will avoid trying to add the other users if the IdentityMgtEventListener is disabled
                         //this is a workaround without changing the apis
                         if (e.getMessage().contains("Ask Password Feature is disabled")){
