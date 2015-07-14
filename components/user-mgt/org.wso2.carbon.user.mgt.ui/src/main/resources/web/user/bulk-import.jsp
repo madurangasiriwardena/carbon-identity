@@ -72,48 +72,62 @@
                 CARBON.showWarningDialog("Users file cannot be empty.");
                 return false;
             }
-            var emptyPswd="";
 
-            emptyPswd = validateEmpty("password");
+            passwordType = $('input[name=passwordType]:checked').val();
+            if (passwordType == "default"){
+                var emptyPswd="";
 
-            if (emptyPswd.length>0){
-                CARBON.showWarningDialog("Password field cannot be empty.");
-                return false;
-            }
+                emptyPswd = validateEmpty("password");
 
-            var e = document.getElementById("domain");
-            var passwordRegEx = "<%=userStoreInfo.getPasswordRegEx()%>";
-            if (e != null) {
+                if (emptyPswd.length>0){
+                    CARBON.showWarningDialog("Password field cannot be empty.");
+                    return false;
+                }
 
-                var selectedDomainValue = e.options[e.selectedIndex].text.toUpperCase()
-                var pwd = "pwd_";
+                var e = document.getElementById("domain");
+                var passwordRegEx = "<%=userStoreInfo.getPasswordRegEx()%>";
+                if (e != null) {
 
-                var passwordRegExElm = document.getElementById(pwd + selectedDomainValue);
+                    var selectedDomainValue = e.options[e.selectedIndex].text.toUpperCase()
+                    var pwd = "pwd_";
 
-                if (passwordRegExElm != null) {
-                    passwordRegEx = document.getElementById(pwd + selectedDomainValue).value;
+                    var passwordRegExElm = document.getElementById(pwd + selectedDomainValue);
+
+                    if (passwordRegExElm != null) {
+                        passwordRegEx = document.getElementById(pwd + selectedDomainValue).value;
+                    } else {
+                        passwordRegEx = document.getElementById("pwd_primary_null").value;
+                    }
+
                 } else {
+
                     passwordRegEx = document.getElementById("pwd_primary_null").value;
+
                 }
 
-            } else {
-
-                passwordRegEx = document.getElementById("pwd_primary_null").value;
-
-            }
-
-            error = validatePasswordOnCreation("password", "password", passwordRegEx);
-            if (error != "") {
-                if (error == "Empty Password") {
-                    CARBON.showWarningDialog("<fmt:message key="enter.the.same.password.twice"/>");
-                } else if (error == "Invalid Character") {
-                    CARBON.showWarningDialog("<fmt:message key="invalid.character.in.password"/>");
-                } else if (error == "No conformance") {
-                    CARBON.showWarningDialog("<fmt:message key="password.conformance"/>");
+                error = validatePasswordOnCreation("password", "password", passwordRegEx);
+                if (error != "") {
+                    if (error == "Empty Password") {
+                        CARBON.showWarningDialog("<fmt:message key="enter.the.same.password.twice"/>");
+                    } else if (error == "Invalid Character") {
+                        CARBON.showWarningDialog("<fmt:message key="invalid.character.in.password"/>");
+                    } else if (error == "No conformance") {
+                        CARBON.showWarningDialog("<fmt:message key="password.conformance"/>");
+                    }
+                    return false;
                 }
-                return false;
             }
             return true;
+
+        }
+
+        function enableDafaultPassword(){
+            passwordType = $('input[name=passwordType]:checked').val();
+            if (passwordType == "default"){
+                document.getElementById("passwordRow").style.visibility = "visible";
+            }else{
+                document.getElementById("passwordRow").style.visibility = "hidden";
+            }
         }
     </script>
     <div id="middle">
@@ -138,6 +152,16 @@
                                                size="50"/></td>
                                 </tr>
                                 <tr>
+                                    <td><fmt:message key="password.type"/><font
+                                            color="red">*</font></td>
+                                    <td>
+                                        <input type="radio" name="passwordType" value="random"
+                                               onchange="enableDafaultPassword()">Random Password
+                                        <input type="radio" name="passwordType" value="default"
+                                               onchange="enableDafaultPassword()" checked="checked">Default Password
+                                    </td>
+                                </tr>
+                                <tr id="passwordRow">
                                     <td><fmt:message key="default.password"/><font
                                             color="red">*</font></td>
                                     <td>
