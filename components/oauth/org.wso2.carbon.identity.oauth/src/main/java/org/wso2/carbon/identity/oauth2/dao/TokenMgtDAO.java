@@ -36,6 +36,7 @@ import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.model.RefreshTokenValidationDataDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.sql.Connection;
@@ -193,7 +194,8 @@ public class TokenMgtDAO {
         ResultSet results = null;
 
         String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-        if (userStoreDomain != null) {
+        if (StringUtils.isNotEmpty(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                (userStoreDomain)) {
             accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
         }
 
@@ -340,7 +342,8 @@ public class TokenMgtDAO {
                 sql = SQLQueries.RETRIEVE_LATEST_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_ORACLE;
             }
 
-            if (StringUtils.isNotEmpty(userStoreDomain)) {
+            if (StringUtils.isNotEmpty(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                    (userStoreDomain)) {
                 //logic to store access token into different tables when multiple user stores are configured.
                 sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
             }
@@ -452,7 +455,8 @@ public class TokenMgtDAO {
             if (includeExpired) {
                 sql = SQLQueries.RETRIEVE_ACTIVE_EXPIRED_ACCESS_TOKEN_BY_CLIENT_ID_USER;
             }
-            if (StringUtils.isNotEmpty(userStoreDomain)) {
+            if (StringUtils.isNotEmpty(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                    (userStoreDomain)) {
                 sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
             }
             if (!isUsernameCaseSensitive){
@@ -550,9 +554,8 @@ public class TokenMgtDAO {
                     user.setTenantDomain(tenantDomain);
                     user.setUserStoreDomain(userstoreDomain);
 
-                    return new AuthzCodeDO(user,
-                                           OAuth2Util.buildScopeArray(scopeString),
-                                           issuedTime, validityPeriod, callbackUrl);
+                    return new AuthzCodeDO(user, OAuth2Util.buildScopeArray(scopeString), issuedTime, validityPeriod,
+                            callbackUrl);
                 } else {
                     String tokenId = resultSet.getString(7);
                     revokeToken(tokenId, userId);
@@ -650,7 +653,8 @@ public class TokenMgtDAO {
                 userStoreDomain = OAuth2Util.getUserStoreDomainFromAccessToken(refreshToken);
             }
             String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-            if (userStoreDomain != null) {
+            if (StringUtils.isNotBlank(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                    (userStoreDomain)) {
                 accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
             }
             mySqlQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_MYSQL.replaceAll("\\$accessTokenStoreTable",
@@ -752,7 +756,8 @@ public class TokenMgtDAO {
             }
 
             String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-            if (userStoreDomain != null) {
+            if (StringUtils.isNotBlank(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                    (userStoreDomain)) {
                 accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
             }
             sql = SQLQueries.DELETE_ACCESS_TOKEN.replaceAll("\\$accessTokenStoreTable", accessTokenStoreTable);
@@ -796,7 +801,8 @@ public class TokenMgtDAO {
             if (includeExpired) {
                 sql = SQLQueries.RETRIEVE_ACTIVE_EXPIRED_ACCESS_TOKEN;
             }
-            if (StringUtils.isNotEmpty(userStoreDomain)) {
+            if (StringUtils.isNotBlank(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                    (userStoreDomain)) {
                 sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
             }
             prepStmt = connection.prepareStatement(sql);
@@ -869,9 +875,9 @@ public class TokenMgtDAO {
 		try {
 
 			String sql = SQLQueries.UPDATE_TOKE_STATE;
-			if (StringUtils.isNotEmpty(userStoreDomain)) {
-				sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN,
-				                  IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
+			if (StringUtils.isNotEmpty(userStoreDomain) && !UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME.equals
+                    (userStoreDomain)) {
+				sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
 			}
 			prepStmt = connection.prepareStatement(sql);
 			prepStmt.setString(1, tokenState);

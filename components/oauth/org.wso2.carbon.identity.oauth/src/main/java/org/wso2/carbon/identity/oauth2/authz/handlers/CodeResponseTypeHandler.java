@@ -21,6 +21,7 @@ package org.wso2.carbon.identity.oauth2.authz.handlers;
 import org.apache.amber.oauth2.common.exception.OAuthSystemException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.application.common.model.User;
 import org.wso2.carbon.identity.oauth.cache.OAuthCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
@@ -30,6 +31,8 @@ import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeRespDTO;
 import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
+import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.sql.Timestamp;
 import java.util.Date;
@@ -68,8 +71,9 @@ public class CodeResponseTypeHandler extends AbstractResponseTypeHandler {
         // convert to milliseconds
         validityPeriod = validityPeriod * 1000;
 
-        AuthzCodeDO authzCodeDO = new AuthzCodeDO(authorizationReqDTO.getUsername(),
-                oauthAuthzMsgCtx.getApprovedScope(), timestamp, validityPeriod, authorizationReqDTO.getCallbackUrl());
+
+        AuthzCodeDO authzCodeDO = new AuthzCodeDO(OAuth2Util.getUserFromName(authorizationReqDTO.getUsername()),
+                oauthAuthzMsgCtx.getApprovedScope(),timestamp,validityPeriod, authorizationReqDTO.getCallbackUrl());
 
         tokenMgtDAO.storeAuthorizationCode(authorizationCode, authorizationReqDTO.getConsumerKey(),
                 authorizationReqDTO.getCallbackUrl(), authzCodeDO);

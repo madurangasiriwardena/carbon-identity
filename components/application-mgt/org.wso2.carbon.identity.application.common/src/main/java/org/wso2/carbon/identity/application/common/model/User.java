@@ -24,7 +24,7 @@ import org.apache.axiom.om.OMElement;
 import java.io.Serializable;
 import java.util.Iterator;
 
-public class User implements Serializable {
+public class User implements Serializable, Cloneable {
 
     /**
      *
@@ -122,5 +122,14 @@ public class User implements Serializable {
      */
     public void setUserName(String userName) {
         this.userName = userName;
+    }
+
+    public Object clone() {
+        try {
+            return super.clone();
+        } catch (CloneNotSupportedException e) {
+            //This class implements cloneable. So cloning is supported
+        }
+        return null;
     }
 }

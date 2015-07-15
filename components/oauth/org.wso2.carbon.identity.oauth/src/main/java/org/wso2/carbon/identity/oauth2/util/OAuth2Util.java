@@ -24,6 +24,7 @@ import org.apache.commons.io.Charsets;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.application.common.model.User;
 import org.wso2.carbon.identity.core.model.OAuthAppDO;
 import org.wso2.carbon.identity.oauth.IdentityOAuthAdminException;
 import org.wso2.carbon.identity.oauth.cache.CacheEntry;
@@ -42,6 +43,7 @@ import org.wso2.carbon.user.api.UserStoreException;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.UserStoreManager;
 import org.wso2.carbon.user.core.service.RealmService;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.sql.Timestamp;
@@ -566,6 +568,32 @@ public class OAuth2Util {
             return domain;
         }
         return UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME;
+    }
+
+    public static User getUserFromName(String username){
+        if (StringUtils.isNotBlank(username)) {
+            String tenantDomain = MultitenantUtils.getTenantDomain(username);
+            String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(username);
+            String userStoreDomain = UserCoreUtil.extractDomainFromName(username);
+            User user = new User();
+            user.setUserName(tenantAwareUsername);
+            user.setTenantDomain(tenantDomain);
+            user.setUserStoreDomain(userStoreDomain);
+
+            return user;
+        }
+        return null;
+    }
+
+    public static String getUsernameFromUser(User user){
+        if (user != null){
+            String username = user.getUserName();
+            username = UserCoreUtil.addDomainToName(username, user.getUserStoreDomain());
+            username = UserCoreUtil.addTenantDomainToEntry(username, user.getTenantDomain());
+
+            return username;
+        }
+        return null;
     }
 
 }
