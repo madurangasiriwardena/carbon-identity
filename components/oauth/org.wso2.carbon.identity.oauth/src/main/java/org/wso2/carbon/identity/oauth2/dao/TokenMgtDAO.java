@@ -39,6 +39,7 @@ import org.wso2.carbon.identity.oauth2.model.RefreshTokenValidationDataDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.user.api.UserStoreException;
 import org.wso2.carbon.user.core.UserCoreConstants;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.sql.Connection;
@@ -335,7 +336,7 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception("Error while reading tenant id from tenant domain", e);
         }
         String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
-        String userDomain = OAuth2Util.getDomainFromName(userName);
+        String userDomain = UserCoreUtil.extractDomainFromName(userName);
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
@@ -464,11 +465,12 @@ public class TokenMgtDAO {
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
         String tenantDomain = MultitenantUtils.getTenantDomain(userName);
         String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
-        String userDomain = OAuth2Util.getDomainFromName(userName);
+        String userDomain = UserCoreUtil.extractDomainFromName(userName);
 
         PreparedStatement prepStmt = null;
         Map<String, AccessTokenDO> accessTokenDOMap = new HashMap<>();
         try {
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
             String sql = SQLQueries.RETRIEVE_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER;
             if (includeExpired) {
                 sql = SQLQueries.RETRIEVE_ACTIVE_EXPIRED_ACCESS_TOKEN_BY_CLIENT_ID_USER;
@@ -488,7 +490,7 @@ public class TokenMgtDAO {
             } else {
                 prepStmt.setString(2, tenantAwareUsername.toLowerCase());
             }
-            prepStmt.setString(3, tenantDomain);
+            prepStmt.setInt(3, tenantId);
             prepStmt.setString(4, userDomain);
             ResultSet resultSet = prepStmt.executeQuery();
 
@@ -535,6 +537,8 @@ public class TokenMgtDAO {
                 errorMsg = errorMsg.replace("ACTIVE", "ACTIVE or EXPIRED");
             }
             throw new IdentityOAuth2Exception(errorMsg, e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while reading tenant id from tenant domain", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -1001,8 +1005,11 @@ public class TokenMgtDAO {
         PreparedStatement ps = null;
         Connection connection = null;
         ResultSet rs = null;
-        Set<String> distinctConsumerKeys = new HashSet<String>();
+        Set<String> distinctConsumerKeys = new HashSet<>();
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(authzUser);
+        String tenantDomain = MultitenantUtils.getTenantDomain(authzUser);
+        String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(authzUser);
+        String userDomain = UserCoreUtil.extractDomainFromName(authzUser);
         try {
             try {
                 connection = IdentityDatabaseUtil.getDBConnection();
@@ -1010,6 +1017,7 @@ public class TokenMgtDAO {
                 throw new IdentityOAuth2Exception(
                         "Error occurred while trying to get an Identity persistence store", e);
             }
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
             if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
                     OAuth2Util.checkUserNameAssertionEnabled()) {
                 accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromUserId(authzUser);
@@ -1021,10 +1029,12 @@ public class TokenMgtDAO {
             }
             ps = connection.prepareStatement(sqlQuery);
             if (isUsernameCaseSensitive) {
-                ps.setString(1, authzUser);
+                ps.setString(1, tenantAwareUsername);
             } else {
-                ps.setString(1, authzUser.toLowerCase());
+                ps.setString(1, tenantAwareUsername.toLowerCase());
             }
+            ps.setInt(2, tenantId);
+            ps.setString(3, userDomain);
             rs = ps.executeQuery();
             while (rs.next()) {
                 String consumerKey = persistenceProcessor.getPreprocessedClientId(rs.getString(1));
@@ -1034,6 +1044,8 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception(
                     "Error occurred while retrieving all distinct Client IDs authorized by " +
                             "User ID : " + authzUser + " until now", e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while retrieving tenant id from tenant domain", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, rs, ps);
         }
