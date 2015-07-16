@@ -336,7 +336,8 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception("Error while reading tenant id from tenant domain", e);
         }
         String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
-        String userDomain = UserCoreUtil.extractDomainFromName(userName);
+        String tenantAwareUsernameWithNoUserDomain = UserCoreUtil.removeDomainFromName(tenantAwareUsername);
+        String userDomain = UserCoreUtil.extractDomainFromName(userName).toUpperCase();
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
@@ -378,9 +379,9 @@ public class TokenMgtDAO {
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
             if (isUsernameCaseSensitive) {
-                prepStmt.setString(2, tenantAwareUsername);
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain);
             } else {
-                prepStmt.setString(2, tenantAwareUsername.toLowerCase());
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain.toLowerCase());
             }
             prepStmt.setInt(3, tenantId);
             prepStmt.setString(4, userDomain);
@@ -423,7 +424,7 @@ public class TokenMgtDAO {
                     String tokenId = resultSet.getString(9);
                     // data loss at dividing the validity period but can be neglected
                     User user = new User();
-                    user.setUserName(tenantAwareUsername);
+                    user.setUserName(tenantAwareUsernameWithNoUserDomain);
                     user.setTenantDomain(tenantDomain);
                     user.setUserStoreDomain(userDomain);
                     AccessTokenDO accessTokenDO = new AccessTokenDO(consumerKey, user, OAuth2Util.buildScopeArray
@@ -465,7 +466,8 @@ public class TokenMgtDAO {
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
         String tenantDomain = MultitenantUtils.getTenantDomain(userName);
         String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
-        String userDomain = UserCoreUtil.extractDomainFromName(userName);
+        String tenantAwareUsernameWithNoUserDomain = UserCoreUtil.removeDomainFromName(tenantAwareUsername);
+        String userDomain = UserCoreUtil.extractDomainFromName(userName).toUpperCase();
 
         PreparedStatement prepStmt = null;
         Map<String, AccessTokenDO> accessTokenDOMap = new HashMap<>();
@@ -486,9 +488,9 @@ public class TokenMgtDAO {
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
             if (isUsernameCaseSensitive) {
-                prepStmt.setString(2, tenantAwareUsername);
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain);
             } else {
-                prepStmt.setString(2, tenantAwareUsername.toLowerCase());
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain.toLowerCase());
             }
             prepStmt.setInt(3, tenantId);
             prepStmt.setString(4, userDomain);
@@ -510,7 +512,7 @@ public class TokenMgtDAO {
                     String tokenId = resultSet.getString(9);
 
                     User user = new User();
-                    user.setUserName(tenantAwareUsername);
+                    user.setUserName(tenantAwareUsernameWithNoUserDomain);
                     user.setTenantDomain(tenantDomain);
                     user.setUserStoreDomain(userStoreDomain);
                     AccessTokenDO dataDO = new AccessTokenDO(consumerKey, user, scope, issuedTime,
@@ -1009,7 +1011,8 @@ public class TokenMgtDAO {
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(authzUser);
         String tenantDomain = MultitenantUtils.getTenantDomain(authzUser);
         String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(authzUser);
-        String userDomain = UserCoreUtil.extractDomainFromName(authzUser);
+        String tenantAwareUsernameWithNoUserDomain = UserCoreUtil.removeDomainFromName(tenantAwareUsername);
+        String userDomain = UserCoreUtil.extractDomainFromName(authzUser).toUpperCase();
         try {
             try {
                 connection = IdentityDatabaseUtil.getDBConnection();
@@ -1029,9 +1032,9 @@ public class TokenMgtDAO {
             }
             ps = connection.prepareStatement(sqlQuery);
             if (isUsernameCaseSensitive) {
-                ps.setString(1, tenantAwareUsername);
+                ps.setString(1, tenantAwareUsernameWithNoUserDomain);
             } else {
-                ps.setString(1, tenantAwareUsername.toLowerCase());
+                ps.setString(1, tenantAwareUsernameWithNoUserDomain.toLowerCase());
             }
             ps.setInt(2, tenantId);
             ps.setString(3, userDomain);
