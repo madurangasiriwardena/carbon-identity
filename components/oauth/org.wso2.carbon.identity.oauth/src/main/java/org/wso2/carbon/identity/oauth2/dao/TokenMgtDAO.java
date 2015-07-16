@@ -29,6 +29,7 @@ import org.wso2.carbon.identity.core.util.IdentityDatabaseUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth.tokenprocessor.PlainTextPersistenceProcessor;
 import org.wso2.carbon.identity.oauth.tokenprocessor.TokenPersistenceProcessor;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
@@ -36,6 +37,7 @@ import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.model.RefreshTokenValidationDataDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.user.api.UserStoreException;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
@@ -162,7 +164,9 @@ public class TokenMgtDAO {
             prepStmt.setString(4, OAuth2Util.buildScopeString(authzCodeDO.getScope()));
             prepStmt.setString(5, authzCodeDO.getAuthorizedUser().getUserName());
             prepStmt.setString(6, authzCodeDO.getAuthorizedUser().getUserStoreDomain());
-            prepStmt.setString(7, authzCodeDO.getAuthorizedUser().getTenantDomain());
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(authzCodeDO
+                    .getAuthorizedUser().getTenantDomain());
+            prepStmt.setInt(7, tenantId);
             prepStmt.setTimestamp(8, authzCodeDO.getIssuedTime(),
                                   Calendar.getInstance(TimeZone.getTimeZone("UTC")));
             prepStmt.setLong(9, authzCodeDO.getValidityPeriod());
@@ -177,6 +181,10 @@ public class TokenMgtDAO {
             log.error(e.getMessage(), e);
             throw new IdentityOAuth2Exception("Error when storing the authorization code for consumer key : "
                                               + consumerKey);
+        } catch (UserStoreException e) {
+            String errorMsg = "Error while reading tenant id from tenant domain.";
+            log.error(errorMsg, e);
+            throw new IdentityOAuth2Exception(errorMsg, e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -212,7 +220,9 @@ public class TokenMgtDAO {
             }
             prepStmt.setString(3, persistenceProcessor.getProcessedClientId(consumerKey));
             prepStmt.setString(4, accessTokenDO.getAuthzUser().getUserName());
-            prepStmt.setString(5, accessTokenDO.getAuthzUser().getTenantDomain());
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(accessTokenDO
+                    .getAuthzUser().getTenantDomain());
+            prepStmt.setInt(5, tenantId);
             prepStmt.setString(6, accessTokenDO.getAuthzUser().getUserStoreDomain());
             prepStmt.setTimestamp(7, accessTokenDO.getIssuedTime(), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
             prepStmt.setTimestamp(8, accessTokenDO.getRefreshTokenIssuedTime(), Calendar.getInstance(TimeZone
@@ -248,6 +258,8 @@ public class TokenMgtDAO {
         } catch (SQLException e) {
             throw new IdentityOAuth2Exception(
                     "Error when storing the access token for consumer key : " + consumerKey, e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while reading tenant id from tenant domain", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(null, null, prepStmt);
         }
@@ -316,6 +328,12 @@ public class TokenMgtDAO {
 
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
         String tenantDomain = MultitenantUtils.getTenantDomain(userName);
+        int tenantId = -1234;
+        try {
+            tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while reading tenant id from tenant domain", e);
+        }
         String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
         String userDomain = OAuth2Util.getDomainFromName(userName);
 
@@ -363,7 +381,7 @@ public class TokenMgtDAO {
             } else {
                 prepStmt.setString(2, tenantAwareUsername.toLowerCase());
             }
-            prepStmt.setString(3, tenantDomain);
+            prepStmt.setInt(3, tenantId);
             prepStmt.setString(4, userDomain);
 
             if (hashedScope != null) {
