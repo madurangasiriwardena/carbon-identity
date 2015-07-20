@@ -137,9 +137,9 @@ public class AccessTokenIssuer {
         // loading the stored application data
         OAuthAppDO oAuthAppDO = getAppInformation(tokenReqDTO);
         String applicationName = oAuthAppDO.getApplicationName();
-        String userName = tokReqMsgCtx.getAuthorizedUser();
+        String userName = OAuth2Util.getUsernameFromUser(tokReqMsgCtx.getAuthorizedUser());
         if (!authzGrantHandler.isOfTypeApplicationUser()) {
-            tokReqMsgCtx.setAuthorizedUser(oAuthAppDO.getUserName());
+            tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromName(oAuthAppDO.getUserName()));
             tokReqMsgCtx.setTenantID(oAuthAppDO.getTenantId());
         }
 

@@ -22,12 +22,14 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.application.common.model.User;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.persistence.JDBCPersistenceManager;
 import org.wso2.carbon.identity.core.util.IdentityDatabaseUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth.tokenprocessor.PlainTextPersistenceProcessor;
 import org.wso2.carbon.identity.oauth.tokenprocessor.TokenPersistenceProcessor;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
@@ -35,6 +37,9 @@ import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.model.RefreshTokenValidationDataDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.user.api.UserStoreException;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
+import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.sql.Connection;
 import java.sql.DataTruncation;
@@ -157,10 +162,14 @@ public class TokenMgtDAO {
             prepStmt.setString(2, persistenceProcessor.getProcessedClientId(consumerKey));
             prepStmt.setString(3, callbackUrl);
             prepStmt.setString(4, OAuth2Util.buildScopeString(authzCodeDO.getScope()));
-            prepStmt.setString(5, authzCodeDO.getAuthorizedUser());
-            prepStmt.setTimestamp(6, authzCodeDO.getIssuedTime(),
+            prepStmt.setString(5, authzCodeDO.getAuthorizedUser().getUserName());
+            prepStmt.setString(6, authzCodeDO.getAuthorizedUser().getUserStoreDomain());
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(authzCodeDO
+                    .getAuthorizedUser().getTenantDomain());
+            prepStmt.setInt(7, tenantId);
+            prepStmt.setTimestamp(8, authzCodeDO.getIssuedTime(),
                                   Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-            prepStmt.setLong(7, authzCodeDO.getValidityPeriod());
+            prepStmt.setLong(9, authzCodeDO.getValidityPeriod());
             prepStmt.execute();
             connection.commit();
         } catch (IdentityException e) {
@@ -172,6 +181,10 @@ public class TokenMgtDAO {
             log.error(e.getMessage(), e);
             throw new IdentityOAuth2Exception("Error when storing the authorization code for consumer key : "
                                               + consumerKey);
+        } catch (UserStoreException e) {
+            String errorMsg = "Error while retrieving tenant id from tenant domain.";
+            log.error(errorMsg, e);
+            throw new IdentityOAuth2Exception(errorMsg, e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -189,7 +202,7 @@ public class TokenMgtDAO {
         ResultSet results = null;
 
         String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-        if (userStoreDomain != null) {
+        if (StringUtils.isNotEmpty(userStoreDomain)) {
             accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
         }
 
@@ -205,16 +218,20 @@ public class TokenMgtDAO {
                 prepStmt.setString(2, accessTokenDO.getRefreshToken());
             }
             prepStmt.setString(3, persistenceProcessor.getProcessedClientId(consumerKey));
-            prepStmt.setString(4, accessTokenDO.getAuthzUser());
-            prepStmt.setTimestamp(5, accessTokenDO.getIssuedTime(), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-            prepStmt.setTimestamp(6, accessTokenDO.getRefreshTokenIssuedTime(), Calendar.getInstance(TimeZone
+            prepStmt.setString(4, accessTokenDO.getAuthzUser().getUserName());
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(accessTokenDO
+                    .getAuthzUser().getTenantDomain());
+            prepStmt.setInt(5, tenantId);
+            prepStmt.setString(6, accessTokenDO.getAuthzUser().getUserStoreDomain());
+            prepStmt.setTimestamp(7, accessTokenDO.getIssuedTime(), Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+            prepStmt.setTimestamp(8, accessTokenDO.getRefreshTokenIssuedTime(), Calendar.getInstance(TimeZone
                     .getTimeZone("UTC")));
-            prepStmt.setLong(7, accessTokenDO.getValidityPeriodInMillis());
-            prepStmt.setLong(8, accessTokenDO.getRefreshTokenValidityPeriodInMillis());
-            prepStmt.setString(9, OAuth2Util.hashScopes(accessTokenDO.getScope()));
-            prepStmt.setString(10, accessTokenDO.getTokenState());
-            prepStmt.setString(11, accessTokenDO.getTokenType());
-            prepStmt.setString(12, accessTokenDO.getTokenId());
+            prepStmt.setLong(9, accessTokenDO.getValidityPeriodInMillis());
+            prepStmt.setLong(10, accessTokenDO.getRefreshTokenValidityPeriodInMillis());
+            prepStmt.setString(11, OAuth2Util.hashScopes(accessTokenDO.getScope()));
+            prepStmt.setString(12, accessTokenDO.getTokenState());
+            prepStmt.setString(13, accessTokenDO.getTokenType());
+            prepStmt.setString(14, accessTokenDO.getTokenId());
             prepStmt.execute();
             String accessTokenId = accessTokenDO.getTokenId();
             prepStmt = connection.prepareStatement(sqlAddScopes);
@@ -240,6 +257,8 @@ public class TokenMgtDAO {
         } catch (SQLException e) {
             throw new IdentityOAuth2Exception(
                     "Error when storing the access token for consumer key : " + consumerKey, e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while retrieving tenant id from tenant domain", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(null, null, prepStmt);
         }
@@ -307,6 +326,16 @@ public class TokenMgtDAO {
         }
 
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
+        String tenantDomain = MultitenantUtils.getTenantDomain(userName);
+        int tenantId = -1234;
+        try {
+            tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while retrieving tenant id from tenant domain", e);
+        }
+        String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
+        String tenantAwareUsernameWithNoUserDomain = UserCoreUtil.removeDomainFromName(tenantAwareUsername);
+        String userDomain = UserCoreUtil.extractDomainFromName(userName).toUpperCase();
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
@@ -347,13 +376,15 @@ public class TokenMgtDAO {
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
             if (isUsernameCaseSensitive) {
-                prepStmt.setString(2, userName);
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain);
             } else {
-                prepStmt.setString(2, userName.toLowerCase());
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain.toLowerCase());
             }
+            prepStmt.setInt(3, tenantId);
+            prepStmt.setString(4, userDomain);
 
             if (hashedScope != null) {
-                prepStmt.setString(3, hashedScope);
+                prepStmt.setString(5, hashedScope);
             }
 
             resultSet = prepStmt.executeQuery();
@@ -389,7 +420,11 @@ public class TokenMgtDAO {
                     String userType = resultSet.getString(8);
                     String tokenId = resultSet.getString(9);
                     // data loss at dividing the validity period but can be neglected
-                    AccessTokenDO accessTokenDO = new AccessTokenDO(consumerKey, userName, OAuth2Util.buildScopeArray
+                    User user = new User();
+                    user.setUserName(tenantAwareUsernameWithNoUserDomain);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userDomain);
+                    AccessTokenDO accessTokenDO = new AccessTokenDO(consumerKey, user, OAuth2Util.buildScopeArray
                             (scope), new Timestamp(issuedTime), new Timestamp(refreshTokenIssuedTime)
                             , validityPeriodInMillis, refreshTokenValidityPeriodInMillis, userType);
                     accessTokenDO.setAccessToken(accessToken);
@@ -426,10 +461,15 @@ public class TokenMgtDAO {
         }
 
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(userName);
+        String tenantDomain = MultitenantUtils.getTenantDomain(userName);
+        String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(userName);
+        String tenantAwareUsernameWithNoUserDomain = UserCoreUtil.removeDomainFromName(tenantAwareUsername);
+        String userDomain = UserCoreUtil.extractDomainFromName(userName).toUpperCase();
 
         PreparedStatement prepStmt = null;
         Map<String, AccessTokenDO> accessTokenDOMap = new HashMap<>();
         try {
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
             String sql = SQLQueries.RETRIEVE_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER;
             if (includeExpired) {
                 sql = SQLQueries.RETRIEVE_ACTIVE_EXPIRED_ACCESS_TOKEN_BY_CLIENT_ID_USER;
@@ -444,10 +484,12 @@ public class TokenMgtDAO {
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
             if (isUsernameCaseSensitive) {
-                prepStmt.setString(2, userName);
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain);
             } else {
-                prepStmt.setString(2, userName.toLowerCase());
+                prepStmt.setString(2, tenantAwareUsernameWithNoUserDomain.toLowerCase());
             }
+            prepStmt.setInt(3, tenantId);
+            prepStmt.setString(4, userDomain);
             ResultSet resultSet = prepStmt.executeQuery();
 
             while (resultSet.next()) {
@@ -465,7 +507,11 @@ public class TokenMgtDAO {
                     String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(8));
                     String tokenId = resultSet.getString(9);
 
-                    AccessTokenDO dataDO = new AccessTokenDO(consumerKey, userName, scope, issuedTime,
+                    User user = new User();
+                    user.setUserName(tenantAwareUsernameWithNoUserDomain);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userStoreDomain);
+                    AccessTokenDO dataDO = new AccessTokenDO(consumerKey, user, scope, issuedTime,
                             refreshTokenIssuedTime, validityPeriodInMillis,
                             refreshTokenValidityPeriodMillis, tokenType);
                     dataDO.setAccessToken(accessToken);
@@ -489,6 +535,8 @@ public class TokenMgtDAO {
                 errorMsg = errorMsg.replace("ACTIVE", "ACTIVE or EXPIRED");
             }
             throw new IdentityOAuth2Exception(errorMsg, e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while retrieving tenant id from tenant domain", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -513,15 +561,22 @@ public class TokenMgtDAO {
             if (resultSet.next()) {
                 if (resultSet.getString(6).equals(OAuthConstants.AuthorizationCodeState.ACTIVE)) {
                     String authorizedUser = resultSet.getString(1);
-                    String scopeString = resultSet.getString(2);
-                    String callbackUrl = resultSet.getString(3);
-                    Timestamp issuedTime = resultSet.getTimestamp(4,
-                                                                  Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-                    long validityPeriod = resultSet.getLong(5);
+                    String userstoreDomain = resultSet.getString(2);
+                    int tenantId = resultSet.getInt(3);
+                    String tenantDomain = OAuthComponentServiceHolder.getRealmService().getTenantManager().getDomain(tenantId);
+                    String scopeString = resultSet.getString(4);
+                    String callbackUrl = resultSet.getString(5);
+                    Timestamp issuedTime = resultSet.getTimestamp(6,
+                            Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+                    long validityPeriod = resultSet.getLong(7);
 
-                    return new AuthzCodeDO(authorizedUser,
-                                           OAuth2Util.buildScopeArray(scopeString),
-                                           issuedTime, validityPeriod, callbackUrl);
+                    User user = new User();
+                    user.setUserName(authorizedUser);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userstoreDomain);
+
+                    return new AuthzCodeDO(user, OAuth2Util.buildScopeArray(scopeString), issuedTime, validityPeriod,
+                            callbackUrl);
                 } else {
                     String tokenId = resultSet.getString(7);
                     revokeToken(tokenId, userId);
@@ -536,6 +591,9 @@ public class TokenMgtDAO {
             log.error("Error when executing the SQL : " + SQLQueries.VALIDATE_AUTHZ_CODE);
             log.error(e.getMessage(), e);
             throw new IdentityOAuth2Exception("Error when validating an authorization code", e);
+        } catch (UserStoreException e) {
+            String errorMsg = "Error while retrieving tenant domain from tenant id.";
+            throw new IdentityOAuth2Exception(errorMsg, e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -619,7 +677,7 @@ public class TokenMgtDAO {
                 userStoreDomain = OAuth2Util.getUserStoreDomainFromAccessToken(refreshToken);
             }
             String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-            if (userStoreDomain != null) {
+            if (StringUtils.isNotBlank(userStoreDomain)) {
                 accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
             }
             mySqlQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_MYSQL.replaceAll("\\$accessTokenStoreTable",
@@ -667,13 +725,20 @@ public class TokenMgtDAO {
                 if (iterateId == 0) {
                     validationDataDO.setAccessToken(persistenceProcessor.getPreprocessedAccessTokenIdentifier(
                             resultSet.getString(1)));
-                    validationDataDO.setAuthorizedUser(resultSet.getString(2));
-                    validationDataDO.setScope(OAuth2Util.buildScopeArray(resultSet.getString(3)));
-                    validationDataDO.setRefreshTokenState(resultSet.getString(4));
-                    validationDataDO.setIssuedTime(resultSet.getTimestamp(5, Calendar.getInstance(TimeZone.getTimeZone
+                    String userName = resultSet.getString(2);
+                    int tenantId = resultSet.getInt(3);
+                    String userDomain = resultSet.getString(4);
+                    String tenantDomain = OAuthComponentServiceHolder.getRealmService().getTenantManager().getDomain
+                            (tenantId);
+                    String authz_user = UserCoreUtil.addDomainToName(userName, userDomain);
+                    authz_user = UserCoreUtil.addTenantDomainToEntry(authz_user, tenantDomain);
+                    validationDataDO.setAuthorizedUser(authz_user);
+                    validationDataDO.setScope(OAuth2Util.buildScopeArray(resultSet.getString(5)));
+                    validationDataDO.setRefreshTokenState(resultSet.getString(6));
+                    validationDataDO.setIssuedTime(resultSet.getTimestamp(7, Calendar.getInstance(TimeZone.getTimeZone
                             ("UTC"))));
-                    validationDataDO.setValidityPeriodInMillis(resultSet.getLong(6));
-                    validationDataDO.setTokenId(resultSet.getString(7));
+                    validationDataDO.setValidityPeriodInMillis(resultSet.getLong(8));
+                    validationDataDO.setTokenId(resultSet.getString(9));
                 } else {
                     scopes.add(resultSet.getString(3));
                 }
@@ -692,6 +757,8 @@ public class TokenMgtDAO {
             log.error("Error when executing the SQL : " + sql);
             log.error(e.getMessage(), e);
             throw new IdentityOAuth2Exception("Error when validating a refresh token", e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while retrieving tenenat domain from tenant id" , e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -721,7 +788,7 @@ public class TokenMgtDAO {
             }
 
             String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-            if (userStoreDomain != null) {
+            if (StringUtils.isNotBlank(userStoreDomain)) {
                 accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
             }
             sql = SQLQueries.DELETE_ACCESS_TOKEN.replaceAll("\\$accessTokenStoreTable", accessTokenStoreTable);
@@ -765,7 +832,7 @@ public class TokenMgtDAO {
             if (includeExpired) {
                 sql = SQLQueries.RETRIEVE_ACTIVE_EXPIRED_ACCESS_TOKEN;
             }
-            if (StringUtils.isNotEmpty(userStoreDomain)) {
+            if (StringUtils.isNotBlank(userStoreDomain)) {
                 sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
             }
             prepStmt = connection.prepareStatement(sql);
@@ -779,17 +846,24 @@ public class TokenMgtDAO {
                 if (iterateId == 0) {
                     String consumerKey = persistenceProcessor.getPreprocessedClientId(resultSet.getString(1));
                     String authorizedUser = resultSet.getString(2);
-                    String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(3));
-                    Timestamp issuedTime = resultSet.getTimestamp(4,
+                    int tenantId = resultSet.getInt(3);
+                    String tenantDomain = OAuthComponentServiceHolder.getRealmService().getTenantManager().getDomain(tenantId);
+                    String userDomain = resultSet.getString(4);
+                    String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(5));
+                    Timestamp issuedTime = resultSet.getTimestamp(6,
                             Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-                    Timestamp refreshTokenIssuedTime = resultSet.getTimestamp(5,
+                    Timestamp refreshTokenIssuedTime = resultSet.getTimestamp(7,
                             Calendar.getInstance(TimeZone.getTimeZone("UTC")));
-                    long validityPeriodInMillis = resultSet.getLong(6);
-                    long refreshTokenValidityPeriodMillis = resultSet.getLong(7);
-                    String tokenType = resultSet.getString(8);
-                    String refreshToken = resultSet.getString(9);
-                    String tokenId = resultSet.getString(10);
-                    dataDO = new AccessTokenDO(consumerKey, authorizedUser, scope, issuedTime, refreshTokenIssuedTime,
+                    long validityPeriodInMillis = resultSet.getLong(8);
+                    long refreshTokenValidityPeriodMillis = resultSet.getLong(9);
+                    String tokenType = resultSet.getString(10);
+                    String refreshToken = resultSet.getString(11);
+                    String tokenId = resultSet.getString(12);
+                    User user = new User();
+                    user.setUserName(authorizedUser);
+                    user.setUserStoreDomain(userDomain);
+                    user.setTenantDomain(tenantDomain);
+                    dataDO = new AccessTokenDO(consumerKey, user, scope, issuedTime, refreshTokenIssuedTime,
                             validityPeriodInMillis, refreshTokenValidityPeriodMillis, tokenType);
                     dataDO.setAccessToken(accessTokenIdentifier);
                     dataDO.setRefreshToken(refreshToken);
@@ -809,6 +883,8 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception(errorMsg, e);
         } catch (SQLException e) {
             throw new IdentityOAuth2Exception("Error when retrieving Access Token : " + accessTokenIdentifier, e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error when retrieving tenant domain from tenant id", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, prepStmt);
         }
@@ -833,8 +909,7 @@ public class TokenMgtDAO {
 
 			String sql = SQLQueries.UPDATE_TOKE_STATE;
 			if (StringUtils.isNotEmpty(userStoreDomain)) {
-				sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN,
-				                  IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
+				sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
 			}
 			prepStmt = connection.prepareStatement(sql);
 			prepStmt.setString(1, tokenState);
@@ -940,8 +1015,12 @@ public class TokenMgtDAO {
         PreparedStatement ps = null;
         Connection connection = null;
         ResultSet rs = null;
-        Set<String> distinctConsumerKeys = new HashSet<String>();
+        Set<String> distinctConsumerKeys = new HashSet<>();
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(authzUser);
+        String tenantDomain = MultitenantUtils.getTenantDomain(authzUser);
+        String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(authzUser);
+        String tenantAwareUsernameWithNoUserDomain = UserCoreUtil.removeDomainFromName(tenantAwareUsername);
+        String userDomain = UserCoreUtil.extractDomainFromName(authzUser).toUpperCase();
         try {
             try {
                 connection = IdentityDatabaseUtil.getDBConnection();
@@ -949,6 +1028,7 @@ public class TokenMgtDAO {
                 throw new IdentityOAuth2Exception(
                         "Error occurred while trying to get an Identity persistence store", e);
             }
+            int tenantId = OAuthComponentServiceHolder.getRealmService().getTenantManager().getTenantId(tenantDomain);
             if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
                     OAuth2Util.checkUserNameAssertionEnabled()) {
                 accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromUserId(authzUser);
@@ -960,10 +1040,12 @@ public class TokenMgtDAO {
             }
             ps = connection.prepareStatement(sqlQuery);
             if (isUsernameCaseSensitive) {
-                ps.setString(1, authzUser);
+                ps.setString(1, tenantAwareUsernameWithNoUserDomain);
             } else {
-                ps.setString(1, authzUser.toLowerCase());
+                ps.setString(1, tenantAwareUsernameWithNoUserDomain.toLowerCase());
             }
+            ps.setInt(2, tenantId);
+            ps.setString(3, userDomain);
             rs = ps.executeQuery();
             while (rs.next()) {
                 String consumerKey = persistenceProcessor.getPreprocessedClientId(rs.getString(1));
@@ -973,6 +1055,8 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception(
                     "Error occurred while retrieving all distinct Client IDs authorized by " +
                             "User ID : " + authzUser + " until now", e);
+        } catch (UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while retrieving tenant id from tenant domain", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, rs, ps);
         }
@@ -1104,6 +1188,185 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception(errorMsg, e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, null);
+        }
+    }
+
+    public void revokeAccessTokensOfTenant(int tenantId) throws IdentityOAuth2Exception {
+
+        //we do not support access token partitioning here
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+
+            String sqlQuery = SQLQueries.REVOKE_ACCESS_TOKENS_IN_TENANT;
+            connection = IdentityDatabaseUtil.getDBConnection();
+            ps = connection.prepareStatement(sqlQuery);
+            ps.setString(1, OAuthConstants.TokenStates.TOKEN_STATE_REVOKED);
+            ps.setString(2, UUID.randomUUID().toString());
+            ps.setInt(3, tenantId);
+            ps.setString(4, OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE);
+            int count = ps.executeUpdate();
+            if (log.isDebugEnabled()) {
+                log.debug("Number of rows being updated : " + count);
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
+        } catch (IdentityException e) {
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
+        }
+    }
+
+    public void revokeAccessTokensOfUserStore(int tenantId, String userStoreName) throws IdentityOAuth2Exception {
+
+        //we do not support access token partitioning here
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+
+            String sqlQuery = SQLQueries.REVOKE_ACCESS_TOKENS_IN_USER_STORE;
+            connection = IdentityDatabaseUtil.getDBConnection();
+            ps = connection.prepareStatement(sqlQuery);
+            ps.setString(1, OAuthConstants.TokenStates.TOKEN_STATE_REVOKED);
+            ps.setString(2, UUID.randomUUID().toString());
+            ps.setInt(3, tenantId);
+            ps.setString(4, userStoreName.toUpperCase());
+            ps.setString(5, OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE);
+            int count = ps.executeUpdate();
+            if (log.isDebugEnabled()) {
+                log.debug("Number of rows being updated : " + count);
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
+                    userStoreName + "in tenant :" + tenantId, e);
+        } catch (IdentityException e) {
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
+                    userStoreName + "in tenant :" + tenantId, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
+        }
+    }
+
+    public void renameUserStoreNameInAccessTokenTable(int tenantId, String currentUserStoreName, String
+            newUserStoreName) throws IdentityOAuth2Exception {
+
+        //we do not support access token partitioning here
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+
+            String sqlQuery = SQLQueries.RENAME_USER_STORE_IN_ACCESS_TOKENS_TABLE;
+            connection = IdentityDatabaseUtil.getDBConnection();
+            ps = connection.prepareStatement(sqlQuery);
+            ps.setString(1, newUserStoreName.toUpperCase());
+            ps.setInt(2, tenantId);
+            ps.setString(3, currentUserStoreName.toUpperCase());
+            int count = ps.executeUpdate();
+            if (log.isDebugEnabled()) {
+                log.debug("Number of rows being updated : " + count);
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
+            throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
+                    "in tenant :" + tenantId, e);
+        } catch (IdentityException e) {
+            throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
+                    "in tenant :" + tenantId, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
+        }
+    }
+
+    public void revokeAuthorizationCodesOfTenant(int tenantId) throws IdentityOAuth2Exception {
+
+        //we do not support access token partitioning here
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+            String sqlQuery = SQLQueries.REVOKE_AUTHORIZATION_CODES_IN_TENANT;
+            connection = IdentityDatabaseUtil.getDBConnection();
+            ps = connection.prepareStatement(sqlQuery);
+            ps.setString(1, OAuthConstants.AuthorizationCodeState.INACTIVE);
+            ps.setInt(2, tenantId);
+            ps.setString(3, OAuthConstants.AuthorizationCodeState.ACTIVE);
+            int count = ps.executeUpdate();
+            if (log.isDebugEnabled()) {
+                log.debug("Number of rows being updated : " + count);
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
+        } catch (IdentityException e) {
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
+        }
+    }
+
+    public void revokeAuthorizationCodesOfUserStore(int tenantId, String userStoreName) throws IdentityOAuth2Exception {
+
+        //we do not support access token partitioning here
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+            String sqlQuery = SQLQueries.REVOKE_AUTHORIZATION_CODES_IN_USER_STORE;
+            connection = IdentityDatabaseUtil.getDBConnection();
+            ps = connection.prepareStatement(sqlQuery);
+            ps.setString(1, OAuthConstants.AuthorizationCodeState.INACTIVE);
+            ps.setInt(2, tenantId);
+            ps.setString(3, userStoreName.toUpperCase());
+            ps.setString(4, OAuthConstants.AuthorizationCodeState.ACTIVE);
+            int count = ps.executeUpdate();
+            if (log.isDebugEnabled()) {
+                log.debug("Number of rows being updated : " + count);
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
+                    userStoreName + "in tenant :" + tenantId, e);
+        } catch (IdentityException e) {
+            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
+                    userStoreName + "in tenant :" + tenantId, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
+        }
+    }
+
+    public void renameUserStoreNameInAuthorizationCodeTable(int tenantId, String currentUserStoreName, String
+            newUserStoreName) throws IdentityOAuth2Exception {
+
+        //we do not support access token partitioning here
+        Connection connection = null;
+        PreparedStatement ps = null;
+        try {
+            String sqlQuery = SQLQueries.RENAME_USER_STORE_IN_AUTHORIZATION_CODES_TABLE;
+            connection = IdentityDatabaseUtil.getDBConnection();
+            ps = connection.prepareStatement(sqlQuery);
+            ps.setString(1, newUserStoreName.toUpperCase());
+            ps.setInt(2, tenantId);
+            ps.setString(3, currentUserStoreName.toUpperCase());
+            int count = ps.executeUpdate();
+            if (log.isDebugEnabled()) {
+                log.debug("Number of rows being updated : " + count);
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
+            throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
+                    "in tenant :" + tenantId, e);
+        } catch (IdentityException e) {
+            throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
+                    "in tenant :" + tenantId, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }
     }
 
