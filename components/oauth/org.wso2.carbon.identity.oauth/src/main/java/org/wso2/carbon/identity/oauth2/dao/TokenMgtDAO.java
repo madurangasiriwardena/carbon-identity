@@ -1214,7 +1214,7 @@ public class TokenMgtDAO {
             IdentityDatabaseUtil.rollBack(connection);
             throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
         } catch (IdentityException e) {
-            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
+            throw new IdentityOAuth2Exception("Error while retrieving the database connection", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }
@@ -1245,8 +1245,7 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
                     userStoreName + "in tenant :" + tenantId, e);
         } catch (IdentityException e) {
-            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
-                    userStoreName + "in tenant :" + tenantId, e);
+            throw new IdentityOAuth2Exception("Error while retrieving the database connection", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }
@@ -1276,8 +1275,7 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
                     "in tenant :" + tenantId, e);
         } catch (IdentityException e) {
-            throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
-                    "in tenant :" + tenantId, e);
+            throw new IdentityOAuth2Exception("Error while retrieving the database connection", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }
@@ -1304,7 +1302,7 @@ public class TokenMgtDAO {
             IdentityDatabaseUtil.rollBack(connection);
             throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
         } catch (IdentityException e) {
-            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of tenant : " + tenantId, e);
+            throw new IdentityOAuth2Exception("Error while retrieving the database connection", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }
@@ -1333,8 +1331,7 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
                     userStoreName + "in tenant :" + tenantId, e);
         } catch (IdentityException e) {
-            throw new IdentityOAuth2Exception("Error occurred while revoking Access Token of user store : " +
-                    userStoreName + "in tenant :" + tenantId, e);
+            throw new IdentityOAuth2Exception("Error while retrieving the database connection", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }
@@ -1363,8 +1360,7 @@ public class TokenMgtDAO {
             throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
                     "in tenant :" + tenantId, e);
         } catch (IdentityException e) {
-            throw new IdentityOAuth2Exception("Error occurred while renaming user store : " + currentUserStoreName +
-                    "in tenant :" + tenantId, e);
+            throw new IdentityOAuth2Exception("Error while retrieving the database connection", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
         }

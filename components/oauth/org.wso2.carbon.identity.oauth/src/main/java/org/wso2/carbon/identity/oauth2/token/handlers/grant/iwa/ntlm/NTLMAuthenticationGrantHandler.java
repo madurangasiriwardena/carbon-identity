@@ -111,7 +111,7 @@ public class NTLMAuthenticationGrantHandler extends AbstractAuthorizationGrantHa
                         }
                         String resourceOwnerUserNameWithDomain = WindowsAccountImpl.getCurrentUsername();
                         String resourceOwnerUserName = resourceOwnerUserNameWithDomain.split("\\\\")[1];
-                        tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromName(resourceOwnerUserName));
+                        tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromUserName(resourceOwnerUserName));
                         break;
                     }
                     String continueToken = response.getHeader("WWW-Authenticate").

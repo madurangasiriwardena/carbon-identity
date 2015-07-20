@@ -570,7 +570,7 @@ public class OAuth2Util {
         return UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME;
     }
 
-    public static User getUserFromName(String username){
+    public static User getUserFromUserName(String username) throws IllegalArgumentException{
         if (StringUtils.isNotBlank(username)) {
             String tenantDomain = MultitenantUtils.getTenantDomain(username);
             String tenantAwareUsername = MultitenantUtils.getTenantAwareUsername(username);
@@ -583,18 +583,7 @@ public class OAuth2Util {
 
             return user;
         }
-        return null;
-    }
-
-    public static String getUsernameFromUser(User user){
-        if (user != null){
-            String username = user.getUserName();
-            username = UserCoreUtil.addDomainToName(username, user.getUserStoreDomain());
-            username = UserCoreUtil.addTenantDomainToEntry(username, user.getTenantDomain());
-
-            return username;
-        }
-        return null;
+        throw  new IllegalArgumentException("Cannot create user from empty user name");
     }
 
 }

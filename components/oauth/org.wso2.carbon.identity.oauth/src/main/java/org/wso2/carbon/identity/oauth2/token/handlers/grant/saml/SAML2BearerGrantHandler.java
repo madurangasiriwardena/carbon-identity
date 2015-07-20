@@ -174,7 +174,7 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 }
                 return false;
             }
-            tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromName(resourceOwnerUserName));
+            tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromUserName(resourceOwnerUserName));
         } else {
             log.debug("Cannot find a Subject in the Assertion");
             return false;

@@ -184,7 +184,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
     private static Map<String, Object> getClaimsFromUserStore(OAuthTokenReqMessageContext requestMsgCtx)
             throws Exception {
 
-        String username = OAuth2Util.getUsernameFromUser(requestMsgCtx.getAuthorizedUser());
+        String username = requestMsgCtx.getAuthorizedUser().toString();
         String tenantDomain = requestMsgCtx.getAuthorizedUser().getTenantDomain();
 
         UserRealm realm;

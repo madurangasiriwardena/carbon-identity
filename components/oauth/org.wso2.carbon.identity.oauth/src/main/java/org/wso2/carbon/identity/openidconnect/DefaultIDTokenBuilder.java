@@ -106,7 +106,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         long lifetime = Integer.parseInt(config.getOpenIDConnectIDTokenExpiration());
         long curTime = Calendar.getInstance().getTimeInMillis() / 1000;
         // setting subject
-        String subject = OAuth2Util.getUsernameFromUser(request.getAuthorizedUser());
+        String subject = request.getAuthorizedUser().toString();
 
         if (!GrantType.AUTHORIZATION_CODE.toString().equals(request.getOauth2AccessTokenReqDTO().getGrantType()) &&
             !org.wso2.carbon.identity.oauth.common.GrantType.SAML20_BEARER.toString().equals(request
@@ -133,14 +133,14 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                 String claim = serviceProvider.getLocalAndOutBoundAuthenticationConfig().getSubjectClaimUri();
 
                 if (claim != null) {
-                    String username = OAuth2Util.getUsernameFromUser(request.getAuthorizedUser());
+                    String username = request.getAuthorizedUser().toString();
                     String tenantUser = request.getAuthorizedUser().getUserName();
                     String domainName = request.getAuthorizedUser().getTenantDomain();
                     try {
                         subject = IdentityTenantUtil.getRealm(domainName, username).getUserStoreManager()
                                         .getUserClaimValue(tenantUser, claim, null);
                         if (subject == null) {
-                            subject = OAuth2Util.getUsernameFromUser(request.getAuthorizedUser());
+                            subject = request.getAuthorizedUser().toString();
                         }
                     } catch (IdentityException e) {
                         String error = "Error occurred while getting user claim for domain " + domainName + ", " +
@@ -307,7 +307,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         TokenMgtDAO tokenMgtDAO = new TokenMgtDAO();
 
         OAuthCache oauthCache = OAuthCache.getInstance(OAuthServerConfiguration.getInstance().getOAuthCacheTimeout());
-        String authorizedUser = OAuth2Util.getUsernameFromUser(request.getAuthorizedUser());
+        String authorizedUser = request.getAuthorizedUser().toString();
         boolean isUsernameCaseSensitive = OAuth2Util.isUsernameCaseSensitive(authorizedUser);
         if (!isUsernameCaseSensitive){
             authorizedUser = authorizedUser.toLowerCase();

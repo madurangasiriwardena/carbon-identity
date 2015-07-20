@@ -284,8 +284,7 @@ public class OAuth2Service extends AbstractAdmin {
                         org.wso2.carbon.identity.oauth.OAuthUtil.clearOAuthCache(revokeRequestDTO.getToken());
                         tokenMgtDAO.revokeToken(revokeRequestDTO.getToken());
                         addRevokeResponseHeaders(revokeResponseDTO, revokeRequestDTO.getToken(),
-                                accessTokenDO.getRefreshToken(), OAuth2Util.getUsernameFromUser(accessTokenDO
-                                        .getAuthzUser()));
+                                accessTokenDO.getRefreshToken(), accessTokenDO.getAuthzUser().toString());
                     } else {
                         RefreshTokenValidationDataDO refreshTokenDO = tokenMgtDAO.validateRefreshToken(
                                 revokeRequestDTO.getConsumerKey(), revokeRequestDTO.getToken());
