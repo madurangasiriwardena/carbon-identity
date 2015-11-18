@@ -57,6 +57,7 @@ import org.wso2.carbon.user.core.listener.UserOperationEventListener;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.user.core.tenant.TenantManager;
 import org.wso2.carbon.user.mgt.UserMgtConstants;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -70,21 +71,6 @@ import java.util.Map;
 public class UserInformationRecoveryService {
 
     Log log = LogFactory.getLog(UserInformationRecoveryService.class);
-    private static final String EXISTING_USER = "UserAlreadyExisting";
-    private static final String INVALID_CLAIM_URL = "InvalidClaimUrl";
-    private static final String INVALID_USER_NAME = "InvalidUserName";
-    private static final String EXISTING_ROLE = "RoleExisting";
-    private static final String READ_ONLY_STORE = "ReadOnlyUserStoreManager";
-    private static final String READ_ONLY_PRIMARY_STORE = "ReadOnlyPrimaryUserStoreManager";
-    private static final String INVALID_ROLE = "InvalidRole";
-    private static final String ANONYMOUS_USER = "AnonymousUser";
-    private static final String INVALID_OPERATION = "InvalidOperation";
-    private static final String NO_READ_WRITE_PERMISSIONS = "NoReadWritePermission";
-    private static final String PASSWORD_INVALID = "PasswordInvalid";
-    private static final String SHARED_USER_ROLES = "SharedUserRoles";
-    private static final String REMOVE_ADMIN_USER = "RemoveAdminUser";
-    private static final String LOGGED_IN_USER = "LoggedInUser";
-    private static final String ADMIN_USER = "AdminUser";
 
     public CaptchaInfoBean getCaptcha() throws IdentityMgtServiceException {
 
@@ -344,7 +330,13 @@ public class UserInformationRecoveryService {
                 log.warn("No Tenant id for tenant domain " + userDTO.getTenantDomain(), e);
             }
 
-            if (recoveryProcessor.verifyConfirmationCode(3, userDTO.getUserId(), confirmationCode).isVerified()) {
+            if (recoveryProcessor.verifyConfirmationCode(30, userDTO.getUserId(), confirmationCode).isVerified()) {
+                Utils.updatePassword(userDTO.getUserId(), tenantId, newPassword);
+                log.info("Credential is updated for user : " + userDTO.getUserId()
+                        + " and tenant domain : " + userDTO.getTenantDomain());
+                IdentityMgtConfig.getInstance().getRecoveryDataStore().invalidate(userDTO.getUserId(), tenantId);
+                bean = new VerificationBean(true);
+            } else if (recoveryProcessor.verifyConfirmationCode(3, userDTO.getUserId(), confirmationCode).isVerified()) {
                 Utils.updatePassword(userDTO.getUserId(), tenantId, newPassword);
                 log.info("Credential is updated for user : " + userDTO.getUserId()
                         + " and tenant domain : " + userDTO.getTenantDomain());
@@ -399,7 +391,7 @@ public class UserInformationRecoveryService {
             try {
                 bean = processor.verifyConfirmationCode(1, userDTO.getUserId(), confirmation);
                 if (bean.isVerified()) {
-                    bean = processor.updateConfirmationCode(3, userDTO.getUserId(), userDTO.getTenantId());
+                    bean = processor.updateConfirmationCode(20, userDTO.getUserId(), userDTO.getTenantId());
                 } else {
                     bean.setVerified(false);
                 }
@@ -473,9 +465,11 @@ public class UserInformationRecoveryService {
 
             VerificationBean bean;
             try {
-                bean = processor.verifyConfirmationCode(3, userDTO.getUserId(), confirmation);
+                bean = processor.verifyConfirmationCode(20, userDTO.getUserId(), confirmation);
                 if (bean.isVerified()) {
-                    bean = processor.updateConfirmationCode(3, userDTO.getUserId(), userDTO.getTenantId());
+                    bean = processor.updateConfirmationCode(40, userDTO.getUserId(), userDTO.getTenantId());
+                } else if (processor.verifyConfirmationCode(30, userDTO.getUserId(), confirmation).isVerified()) {
+                    bean = processor.updateConfirmationCode(40, userDTO.getUserId(), userDTO.getTenantId());
                 } else {
                     bean.setVerified(false);
                 }
@@ -557,9 +551,10 @@ public class UserInformationRecoveryService {
 
             RecoveryProcessor recoveryProcessor = IdentityMgtServiceComponent.getRecoveryProcessor();
 
-            try {bean = recoveryProcessor.verifyConfirmationCode(3, userDTO.getUserId(), confirmation);
+            try {
+                bean = recoveryProcessor.verifyConfirmationCode(40, userDTO.getUserId(), confirmation);
                 if (bean.isVerified()) {
-                    bean = recoveryProcessor.updateConfirmationCode(3, userDTO.getUserId(), userDTO.getTenantId());
+                    bean = recoveryProcessor.updateConfirmationCode(30, userDTO.getUserId(), userDTO.getTenantId());
                 } else {
                     bean.setVerified(false);
                 }
@@ -703,7 +698,7 @@ public class UserInformationRecoveryService {
             String userName = UserIdentityManagementUtil.getUsernameByClaims(claims, tenantId);
 
             if (userName != null) {
-                UserDTO userDTO = new UserDTO(userName);
+                UserDTO userDTO = new UserDTO(UserCoreUtil.addTenantDomainToEntry(userName, tenantDomain));
                 userDTO.setTenantId(tenantId);
 
                 UserRecoveryDTO dto = new UserRecoveryDTO(userDTO);
@@ -829,7 +824,7 @@ public class UserInformationRecoveryService {
             IdentityMgtConfig config = IdentityMgtConfig.getInstance();
 
             if (isListenerEnable && config.isAuthPolicyAccountLockOnCreation()) {
-                UserDTO userDTO = new UserDTO(userName);
+                UserDTO userDTO = new UserDTO(UserCoreUtil.addTenantDomainToEntry(userName, tenantDomain));
                 userDTO.setTenantId(tenantId);
 
                 UserRecoveryDTO dto = new UserRecoveryDTO(userDTO);

@@ -21,13 +21,13 @@ package org.wso2.carbon.identity.application.authentication.framework.store;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.base.MultitenantConstants;
 import org.wso2.carbon.context.CarbonContext;
+import org.wso2.carbon.identity.application.authentication.framework.internal.FrameworkServiceDataHolder;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
-import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.base.IdentityRuntimeException;
 import org.wso2.carbon.identity.core.util.IdentityDatabaseUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
-import org.wso2.carbon.idp.mgt.util.IdPManagementUtil;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -66,6 +66,11 @@ public class SessionDataStore {
     private static final String SQL_DELETE_STORE_OPERATIONS_TASK =
             "DELETE FROM IDN_AUTH_SESSION_STORE WHERE OPERATION = '"+OPERATION_STORE+"' AND SESSION_ID in (" +
             "SELECT SESSION_ID  FROM IDN_AUTH_SESSION_STORE WHERE OPERATION = '"+OPERATION_DELETE+"' AND TIME_CREATED < ?)";
+    private static final String SQL_DELETE_STORE_OPERATIONS_TASK_MYSQL =
+            "DELETE IDN_AUTH_SESSION_STORE_DELETE FROM IDN_AUTH_SESSION_STORE IDN_AUTH_SESSION_STORE_DELETE WHERE " +
+                    "OPERATION = '"+OPERATION_STORE+"' AND SESSION_ID IN (SELECT SESSION_ID FROM (SELECT SESSION_ID " +
+                    "FROM IDN_AUTH_SESSION_STORE WHERE OPERATION = '"+OPERATION_DELETE+"' AND TIME_CREATED < ?) " +
+                    "IDN_AUTH_SESSION_STORE_SELECT)";
     private static final String SQL_DELETE_DELETE_OPERATIONS_TASK =
             "DELETE FROM IDN_AUTH_SESSION_STORE WHERE OPERATION = '"+OPERATION_DELETE+"' AND  TIME_CREATED < ?";
 
@@ -157,9 +162,8 @@ public class SessionDataStore {
         }
         if (!StringUtils.isBlank(deleteSTORETaskSQL)) {
             sqlDeleteSTORETask = deleteSTORETaskSQL;
-        } else {
-            sqlDeleteSTORETask = SQL_DELETE_STORE_OPERATIONS_TASK;
         }
+
         if (!StringUtils.isBlank(deleteDELETETaskSQL)) {
             sqlDeleteDELETETask = deleteDELETETaskSQL;
         } else {
@@ -178,9 +182,11 @@ public class SessionDataStore {
         if (!enablePersist) {
             log.info("Session Data Persistence of Authentication framework is not enabled.");
         }
-        String isCleanUpEnabledVal = IdentityUtil.getProperty("JDBCPersistenceManager.SessionDataPersist.CleanUp.Enable");
-        String isOperationCleanUpEnabledVal = IdentityUtil.getProperty("JDBCPersistenceManager.SessionDataOperations.CleanUp.Enable");
-        String operationCleanUpPeriodVal = IdentityUtil.getProperty("JDBCPersistenceManager.SessionDataOperations.CleanUp.CleanUpPeriod");
+        String isCleanUpEnabledVal = IdentityUtil.getProperty("JDBCPersistenceManager.SessionDataPersist.SessionDataCleanUp.Enable");
+
+        String isOperationCleanUpEnabledVal = IdentityUtil.getProperty("JDBCPersistenceManager.SessionDataPersist.OperationDataCleanUp.Enable");
+        String operationCleanUpPeriodVal = IdentityUtil.getProperty("JDBCPersistenceManager.SessionDataPersist.OperationDataCleanUp.CleanUpPeriod");
+
 
         if (StringUtils.isBlank(isCleanUpEnabledVal)) {
             isCleanUpEnabledVal = defaultCleanUpEnabled;
@@ -188,25 +194,28 @@ public class SessionDataStore {
         if (StringUtils.isBlank(isOperationCleanUpEnabledVal)) {
             isOperationCleanUpEnabledVal = defaultOperationCleanUpEnabled;
         }
-        if (!StringUtils.isBlank(operationCleanUpPeriodVal)) {
-            operationCleanUpPeriod = Long.parseLong(operationCleanUpPeriodVal);
-        }
+
         if (Boolean.parseBoolean(isCleanUpEnabledVal)) {
             long sessionCleanupPeriod = IdentityUtil.getCleanUpPeriod(
                     CarbonContext.getThreadLocalCarbonContext().getTenantDomain());
-            SessionCleanUpService sessionCleanUpService = new SessionCleanUpService(sessionCleanupPeriod, sessionCleanupPeriod);
+            SessionCleanUpService sessionCleanUpService = new SessionCleanUpService(sessionCleanupPeriod/4,
+                    sessionCleanupPeriod);
             sessionCleanUpService.activateCleanUp();
         } else {
             log.info("Session Data CleanUp Task of Authentication framework is not enabled.");
         }
         if (Boolean.parseBoolean(isOperationCleanUpEnabledVal)) {
-            OperationCleanUpService operationCleanUpService = new OperationCleanUpService(operationCleanUpPeriod, operationCleanUpPeriod);
+            if (StringUtils.isNotBlank(operationCleanUpPeriodVal)) {
+                operationCleanUpPeriod = Long.parseLong(operationCleanUpPeriodVal);
+            }
+            OperationCleanUpService operationCleanUpService = new OperationCleanUpService(operationCleanUpPeriod/4,
+                    operationCleanUpPeriod);
             operationCleanUpService.activateCleanUp();
         } else {
             log.info("Session Data Operations CleanUp Task of Authentication framework is not enabled.");
         }
     }
-    
+
     public static SessionDataStore getInstance() {
         if (instance == null) {
             synchronized (SessionDataStore.class) {
@@ -277,7 +286,7 @@ public class SessionDataStore {
 
     public void storeSessionData(String key, String type, Object entry) {
 
-        storeSessionData(key, type, entry, -1);
+        storeSessionData(key, type, entry, MultitenantConstants.INVALID_TENANT_ID);
     }
 
     public void storeSessionData(String key, String type, Object entry, int tenantId) {
@@ -315,7 +324,7 @@ public class SessionDataStore {
         }
         try {
             statement = connection.prepareStatement(sqlDeleteExpiredDataTask);
-            statement.setLong(1, timestamp.getTime());
+            statement.setLong(1, timestamp.getTime()*1000000);
             statement.execute();
             if (!connection.getAutoCommit()) {
                 connection.commit();
@@ -346,13 +355,21 @@ public class SessionDataStore {
         }
         PreparedStatement preparedStatement = null;
         ResultSet resultSet = null;
+
+        // create a nano time stamp relative to Unix Epoch
+        long currentStandardNano = timestamp.getTime() * 1000000;
+        long currentSystemNano = System.nanoTime();
+
+        currentStandardNano = currentStandardNano + (currentSystemNano - FrameworkServiceDataHolder.getInstance()
+                .getNanoTimeReference());
+
         try {
             preparedStatement = connection.prepareStatement(sqlInsertSTORE);
             preparedStatement.setString(1, key);
             preparedStatement.setString(2, type);
             preparedStatement.setString(3, OPERATION_STORE);
             setBlobObject(preparedStatement, entry, 4);
-            preparedStatement.setLong(5, timestamp.getTime());
+            preparedStatement.setLong(5, currentStandardNano);
             preparedStatement.setInt(6, tenantId);
             preparedStatement.executeUpdate();
             if (!connection.getAutoCommit()) {
@@ -439,6 +456,13 @@ public class SessionDataStore {
             return;
         }
         try {
+            if (StringUtils.isBlank(sqlDeleteSTORETask)) {
+                if (connection.getMetaData().getDriverName().contains("MySQL")) {
+                    sqlDeleteSTORETask = SQL_DELETE_STORE_OPERATIONS_TASK_MYSQL;
+                } else {
+                    sqlDeleteSTORETask = SQL_DELETE_STORE_OPERATIONS_TASK;
+                }
+            }
             statement = connection.prepareStatement(sqlDeleteSTORETask);
             statement.setLong(1, timestamp.getTime());
             statement.execute();

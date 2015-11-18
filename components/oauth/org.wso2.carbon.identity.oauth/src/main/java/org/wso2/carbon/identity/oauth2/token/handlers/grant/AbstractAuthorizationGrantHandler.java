@@ -342,7 +342,8 @@ public abstract class AbstractAuthorizationGrantHandler implements Authorization
             newAccessTokenDO.setAccessToken(newAccessToken);
             newAccessTokenDO.setRefreshToken(refreshToken);
             newAccessTokenDO.setTokenState(OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE);
-            newAccessTokenDO.setTenantID(tokReqMsgCtx.getTenantID());
+            String tenantDomain = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getTenantDomain();
+            newAccessTokenDO.setTenantID(OAuth2Util.getTenantId(tenantDomain));
             newAccessTokenDO.setTokenId(UUID.randomUUID().toString());
             newAccessTokenDO.setGrantType(grantType);
 
@@ -417,8 +418,7 @@ public abstract class AbstractAuthorizationGrantHandler implements Authorization
             authzCallback.setCarbonGrantType(org.wso2.carbon.identity.oauth.common.GrantType.valueOf(
                     OAuthConstants.OAUTH_IWA_NTLM_GRANT_ENUM.toString()));
         } else {
-            authzCallback.setGrantType(GrantType.valueOf(
-                    tokReqMsgCtx.getOauth2AccessTokenReqDTO().getGrantType().toUpperCase()));
+            authzCallback.setGrantType(tokReqMsgCtx.getOauth2AccessTokenReqDTO().getGrantType());
         }
         callbackManager.handleCallback(authzCallback);
         tokReqMsgCtx.setValidityPeriod(authzCallback.getValidityPeriod());
@@ -441,8 +441,7 @@ public abstract class AbstractAuthorizationGrantHandler implements Authorization
             scopeValidationCallback.setCarbonGrantType(org.wso2.carbon.identity.oauth.common.GrantType.valueOf(
                     OAuthConstants.OAUTH_IWA_NTLM_GRANT_ENUM.toString()));
         } else {
-            scopeValidationCallback.setGrantType(GrantType.valueOf(
-                    tokReqMsgCtx.getOauth2AccessTokenReqDTO().getGrantType().toUpperCase()));
+            scopeValidationCallback.setGrantType(tokReqMsgCtx.getOauth2AccessTokenReqDTO().getGrantType());
         }
 
         callbackManager.handleCallback(scopeValidationCallback);

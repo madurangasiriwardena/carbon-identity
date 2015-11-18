@@ -21,6 +21,7 @@ import org.apache.axis2.context.ConfigurationContext;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.owasp.encoder.Encode;
@@ -129,7 +130,7 @@ public class PassiveSTS extends HttpServlet {
             }
         }
 
-        if (fileContent == null || fileContent.trim().length() == 0) {
+        if (StringUtils.isBlank(fileContent)) {
             fileContent = "<html>" +
                     "    <body>" +
                     "        <p>You are now redirected to $url ." +
@@ -153,7 +154,9 @@ public class PassiveSTS extends HttpServlet {
         String parameters = "<input type=\"hidden\" name=\"wa\" value=\"$action\">" +
                 "<input type=\"hidden\" name=\"wresult\" value=\"$result\">";
 
-        fileContent = fileContent.replace("<!--$params-->", parameters);
+        if (StringUtils.isNotBlank(parameters)) {
+            fileContent = fileContent.replace("<!--$params-->", parameters);
+        }
 
         return fileContent;
     }
@@ -174,7 +177,7 @@ public class PassiveSTS extends HttpServlet {
                           String authenticatedIdPs)
             throws ServletException, IOException {
 
-        if (stsRedirectPage == null || stsRedirectPage.trim().length() == 0) {
+        if (StringUtils.isBlank(stsRedirectPage)) {
             // Read the Passive STS Html Redirect Page File Content
             stsRedirectPage = readPassiveSTSHtmlRedirectPage();
         }
@@ -289,7 +292,7 @@ public class PassiveSTS extends HttpServlet {
 
         String commonAuthURL = IdentityUtil.getServerURL(FrameworkConstants.COMMONAUTH, true);
 
-        String selfPath = request.getContextPath();
+        String selfPath = request.getRequestURI();
         //Authentication context keeps data which should be sent to commonAuth endpoint
         AuthenticationRequest authenticationRequest = new AuthenticationRequest();
         authenticationRequest.setRelyingParty(sessionDTO.getRealm());
@@ -403,10 +406,55 @@ public class PassiveSTS extends HttpServlet {
             }
         }
 
-        //TODO send logout request to authentication framework
-        request.getSession().invalidate();
+        try {
+            sendFrameworkForLogout(request, response);
+        } catch (ServletException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Error while sending the logout request", e);
+            }
+        }
+    }
 
-        response.sendRedirect(getAttribute(request.getParameterMap(), PassiveRequestorConstants.REPLY_TO));
+    private void sendFrameworkForLogout(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        Map paramMap = request.getParameterMap();
+
+        SessionDTO sessionDTO = new SessionDTO();
+        sessionDTO.setAction(getAttribute(paramMap, PassiveRequestorConstants.ACTION));
+        sessionDTO.setAttributes(getAttribute(paramMap, PassiveRequestorConstants.ATTRIBUTE));
+        sessionDTO.setContext(getAttribute(paramMap, PassiveRequestorConstants.CONTEXT));
+        sessionDTO.setReplyTo(getAttribute(paramMap, PassiveRequestorConstants.REPLY_TO));
+        sessionDTO.setPseudo(getAttribute(paramMap, PassiveRequestorConstants.PSEUDO));
+        sessionDTO.setRealm(getAttribute(paramMap, PassiveRequestorConstants.REALM));
+        sessionDTO.setRequest(getAttribute(paramMap, PassiveRequestorConstants.REQUEST));
+        sessionDTO.setRequestPointer(getAttribute(paramMap, PassiveRequestorConstants.REQUEST_POINTER));
+        sessionDTO.setPolicy(getAttribute(paramMap, PassiveRequestorConstants.POLCY));
+        sessionDTO.setReqQueryString(request.getQueryString());
+
+        String sessionDataKey = UUIDGenerator.generateUUID();
+        addSessionDataToCache(sessionDataKey, sessionDTO, IdPManagementUtil.getIdleSessionTimeOut
+                (CarbonContext.getThreadLocalCarbonContext().getTenantDomain()));
+        String commonAuthURL = IdentityUtil.getServerURL(FrameworkConstants.COMMONAUTH, true);
+
+        String selfPath = request.getRequestURI();
+        AuthenticationRequest authenticationRequest = new AuthenticationRequest();
+        authenticationRequest.addRequestQueryParam(FrameworkConstants.RequestParams.LOGOUT,
+                new String[]{Boolean.TRUE.toString()});
+        authenticationRequest.setRequestQueryParams(request.getParameterMap());
+        authenticationRequest.setCommonAuthCallerPath(selfPath);
+        authenticationRequest.appendRequestQueryParams(request.getParameterMap());
+        for (Enumeration e = request.getHeaderNames(); e.hasMoreElements(); ) {
+            String headerName = e.nextElement().toString();
+            authenticationRequest.addHeader(headerName, request.getHeader(headerName));
+        }
+
+        AuthenticationRequestCacheEntry authRequest = new AuthenticationRequestCacheEntry
+                (authenticationRequest);
+        FrameworkUtils.addAuthenticationRequestToCache(sessionDataKey, authRequest);
+        String queryParams = "?" + FrameworkConstants.SESSION_DATA_KEY + "=" + sessionDataKey
+                + "&" + FrameworkConstants.RequestParams.TYPE + "=" + FrameworkConstants.PASSIVE_STS;
+
+        response.sendRedirect(commonAuthURL + queryParams);
+
     }
 
     private void handleAuthenticationRequest(HttpServletRequest request, HttpServletResponse response)

@@ -22,16 +22,19 @@ import org.apache.axiom.om.util.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import org.wso2.carbon.identity.application.authentication.endpoint.util.AuthenticationException;
 import org.wso2.securevault.SecretResolver;
 import org.wso2.securevault.SecretResolverFactory;
 import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathFactory;
 import java.io.File;
 import java.io.FileInputStream;
@@ -86,6 +89,7 @@ public class TenantDataManager {
                 } else {
                     log.info(Constants.TenantConstants.CONFIG_FILE_NAME + " file loaded from authentication endpoint " +
                             "webapp");
+
                     inputStream = TenantDataManager.class.getClassLoader().getResourceAsStream(Constants
                             .TenantConstants.CONFIG_FILE_NAME);
                     prop.load(inputStream);
@@ -248,11 +252,20 @@ public class TenantDataManager {
                 XPath xpath = xpf.newXPath();
 
                 InputSource inputSource = new InputSource(new StringReader(xmlString));
+
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setNamespaceAware(true);
+
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document doc = builder.parse(inputSource);
+
                 String xPathExpression = "/*[local-name() = '" + Constants.TenantConstants.RETRIEVE_TENANTS_RESPONSE
                         + "']/*[local-name() = '" +
                         Constants.TenantConstants.RETURN + "']";
+
+                XPathExpression expr = xpath.compile(xPathExpression);
                 NodeList nodeList = null;
-                nodeList = (NodeList) xpath.evaluate(xPathExpression, inputSource, XPathConstants.NODESET);
+                nodeList = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
 
                 // Reset existing tenant domains list
                 tenantDomainList.clear();

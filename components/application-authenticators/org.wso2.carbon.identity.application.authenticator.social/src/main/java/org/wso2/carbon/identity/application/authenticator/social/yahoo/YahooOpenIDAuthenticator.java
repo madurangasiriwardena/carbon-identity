@@ -77,9 +77,15 @@ public class YahooOpenIDAuthenticator extends OpenIDAuthenticator {
         oauthEndpoint.setName(YahooOpenIDAuthenticatorConstants.YAHOO_AUTHZ_URL);
         oauthEndpoint.setValue(IdentityApplicationConstants.YAHOO_AUTHZ_URL);
         oauthEndpoint.setDescription("Enter value corresponding to yahoo oauth endpoint.");
+        oauthEndpoint.setDisplayOrder(1);
         configProperties.add(oauthEndpoint);
 
         return configProperties;
+    }
+
+    @Override
+    public String getClaimDialectURI() {
+        return null;
     }
 
     @Override

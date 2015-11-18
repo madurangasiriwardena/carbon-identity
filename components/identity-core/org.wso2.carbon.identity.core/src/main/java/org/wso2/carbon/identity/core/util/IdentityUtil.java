@@ -45,9 +45,10 @@ import org.wso2.carbon.identity.core.model.IdentityErrorMsgContext;
 import org.wso2.carbon.identity.core.model.IdentityEventListener;
 import org.wso2.carbon.identity.core.model.IdentityEventListenerConfigKey;
 import org.wso2.carbon.registry.core.utils.UUIDGenerator;
+import org.wso2.carbon.user.api.RealmConfiguration;
 import org.wso2.carbon.user.api.UserStoreException;
+import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.UserStoreManager;
-import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.carbon.utils.NetworkUtils;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
@@ -63,7 +64,6 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.SocketException;
-import java.net.URI;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -71,15 +71,26 @@ import java.security.SignatureException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class IdentityUtil {
 
+    public static final ThreadLocal<HashMap<String, Object>> threadLocalProperties = new
+            ThreadLocal<HashMap<String, Object>>() {
+        @Override
+        protected HashMap<String, Object> initialValue() {
+            return new HashMap<String, Object>();
+        }
+    };
     private static final String HMAC_SHA1_ALGORITHM = "HmacSHA1";
     private final static char[] ppidDisplayCharMap = new char[]{'Q', 'L', '2', '3', '4', '5',
             '6', '7', '8', '9', 'A', 'B', 'C',
             'D', 'E', 'F', 'G', 'H', 'J', 'K',
             'M', 'N', 'P', 'R', 'S', 'T', 'U',
             'V', 'W', 'X', 'Y', 'Z'};
+    public static final String DEFAULT_FILE_NAME_REGEX = "^(?!(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\.[^.]*)?$)" +
+                                                         "[^<>:\"/\\\\|?*\\x00-\\x1F]*[^<>:\"/\\\\|?*\\x00-\\x1F\\ .]$";
     private static Log log = LogFactory.getLog(IdentityUtil.class);
     private static Map<String, Object> configuration = new HashMap<String, Object>();
     private static Map<IdentityEventListenerConfigKey, IdentityEventListener> eventListenerConfiguration = new
@@ -281,30 +292,51 @@ public class IdentityUtil {
         if (mgtTransportPort <= 0) {
             mgtTransportPort = CarbonUtils.getTransportPort(axisConfiguration, mgtTransport);
         }
-        String serverUrl = mgtTransport + "://" + hostName.toLowerCase();
+        StringBuilder serverUrl = new StringBuilder(mgtTransport + "://" + hostName.toLowerCase());
         // If it's well known HTTPS port, skip adding port
         if (mgtTransportPort != IdentityCoreConstants.DEFAULT_HTTPS_PORT) {
-            serverUrl += ":" + mgtTransportPort;
+            serverUrl.append(":").append(mgtTransportPort);
         }
         // If ProxyContextPath is defined then append it
-        URI serverUri = URI.create(serverUrl);
+
         String proxyContextPath = ServerConfiguration.getInstance().getFirstProperty(IdentityCoreConstants
                 .PROXY_CONTEXT_PATH);
-        if (proxyContextPath != null && !proxyContextPath.trim().isEmpty()) {
-            serverUri = serverUri.resolve(proxyContextPath);
+        if (StringUtils.isNotBlank(proxyContextPath)) {
+            if (!serverUrl.toString().endsWith("/") && proxyContextPath.trim().charAt(0) != '/') {
+                serverUrl.append("/").append(proxyContextPath.trim());
+            } else if (serverUrl.toString().endsWith("/") && proxyContextPath.trim().charAt(0) == '/') {
+                serverUrl.append(proxyContextPath.trim().substring(1));
+            } else {
+                serverUrl.append(proxyContextPath.trim());
+            }
         }
         // If webContextRoot is defined then append it
         if (addWebContextRoot) {
             String webContextRoot = ServerConfiguration.getInstance().getFirstProperty(IdentityCoreConstants
                     .WEB_CONTEXT_ROOT);
             if (StringUtils.isNotBlank(webContextRoot)) {
-                serverUri = serverUri.resolve(webContextRoot);
+                if (!serverUrl.toString().endsWith("/") && webContextRoot.trim().charAt(0) != '/') {
+                    serverUrl.append("/").append(webContextRoot.trim());
+                } else if (serverUrl.toString().endsWith("/") && webContextRoot.trim().charAt(0) == '/') {
+                    serverUrl.append(webContextRoot.trim().substring(1));
+                } else {
+                    serverUrl.append(webContextRoot.trim());
+                }
             }
         }
         if (StringUtils.isNotBlank(endpoint)) {
-            serverUri = serverUri.resolve(endpoint);
+            if (!serverUrl.toString().endsWith("/") && endpoint.trim().charAt(0) != '/') {
+                serverUrl.append("/").append(endpoint.trim());
+            } else if (serverUrl.toString().endsWith("/") && endpoint.trim().charAt(0) == '/') {
+                serverUrl.append(endpoint.trim().substring(1));
+            } else {
+                serverUrl.append(endpoint.trim());
+            }
         }
-        return serverUri.toString();
+        if (serverUrl.toString().endsWith("/")) {
+            serverUrl.deleteCharAt(serverUrl.length() - 1);
+        }
+        return serverUrl.toString();
     }
 
     /**
@@ -366,7 +398,7 @@ public class IdentityUtil {
      */
     public static boolean isUserStoreInUsernameCaseSensitive(String username, int tenantId) {
 
-        return isUserStoreCaseSensitive(UserCoreUtil.extractDomainFromName(username), tenantId);
+        return isUserStoreCaseSensitive(IdentityUtil.extractDomainFromName(username), tenantId);
     }
 
     /**
@@ -444,5 +476,54 @@ public class IdentityUtil {
             cleanUpPeriod = IdentityConstants.ServerConfig.CLEAN_UP_PERIOD_DEFAULT;
         }
         return Integer.parseInt(cleanUpPeriod);
+    }
+
+    public static String extractDomainFromName(String nameWithDomain) {
+
+        if(nameWithDomain.indexOf(UserCoreConstants.DOMAIN_SEPARATOR) > 0){
+            String domain = nameWithDomain.substring(0, nameWithDomain.indexOf(UserCoreConstants.DOMAIN_SEPARATOR));
+            return domain.toUpperCase();
+        } else {
+            return getPrimaryDomainName();
+        }
+    }
+
+    /**
+     * Appends domain name to the application name without making the domain name into uppercase
+     *
+     * @param name application name
+     * @param domainName domain name
+     * @return application name with domain name
+     */
+    public static String addDomainToName(String name, String domainName) {
+        if (name.indexOf(UserCoreConstants.DOMAIN_SEPARATOR) < 0 && !"PRIMARY".equalsIgnoreCase(domainName) && domainName != null) {
+            domainName = domainName + UserCoreConstants.DOMAIN_SEPARATOR;
+            name = domainName + name;
+        }
+
+        return name;
+    }
+
+    public static String getPrimaryDomainName() {
+        RealmConfiguration realmConfiguration = IdentityTenantUtil.getRealmService().getBootstrapRealmConfiguration();
+        if(realmConfiguration.getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME) != null){
+            return realmConfiguration.getUserStoreProperty(
+                    UserCoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME).toUpperCase();
+        } else {
+            return UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME;
+        }
+    }
+
+    public static boolean isValidFileName(String fileName){
+        String fileNameRegEx = ServerConfiguration.getInstance().getFirstProperty(IdentityCoreConstants.FILE_NAME_REGEX);
+
+        if(isBlank(fileNameRegEx)){
+            fileNameRegEx = DEFAULT_FILE_NAME_REGEX;
+        }
+
+        Pattern pattern = Pattern.compile(fileNameRegEx, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE |
+                                                                   Pattern.COMMENTS);
+        Matcher matcher = pattern.matcher(fileName);
+        return matcher.matches();
     }
 }

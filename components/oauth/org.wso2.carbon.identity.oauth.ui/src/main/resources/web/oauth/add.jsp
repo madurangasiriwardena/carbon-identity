@@ -63,7 +63,7 @@
             <script type="text/javascript">
                 function onClickAdd() {
                     if($(jQuery("#grant_code"))[0].checked || $(jQuery("#grant_implicit"))[0].checked) {
-                        var isValidated = doValidateInputToConfirm(document.getElementById('callback'), "<fmt:message key='callback.is.http'/>",
+                        var isValidated = doValidateInputToConfirm(document.getElementById('callback'), "<fmt:message key='callback.is.not.https'/>",
                                 validate, null, null);
                         if (isValidated) {
                             validate();
@@ -73,6 +73,16 @@
                     }
                 }
                 function validate() {
+                    var callbackUrl = document.getElementById('callback').value;
+                    if ($(jQuery("#grant_code"))[0].checked || $(jQuery("#grant_implicit"))[0].checked) {
+                        if (callbackUrl == '') {
+                            CARBON.showWarningDialog('<fmt:message key="callback.is.required"/>');
+                            return false;
+                        } else if (!isWhiteListed(callbackUrl, "url")) {
+                            CARBON.showWarningDialog('<fmt:message key="callback.is.not.url"/>');
+                            return false;
+                        }
+                    }
                     var value = document.getElementsByName("application")[0].value;
                     if (value == '') {
                         CARBON.showWarningDialog('<fmt:message key="application.is.required"/>');
@@ -80,21 +90,18 @@
                     }
                     value = document.getElementsByName("callback")[0].value;
                     var version2Checked = document.getElementById("oauthVersion20").checked;
-                    if(version2Checked){
-                        if (value == '') {
-                            if($(jQuery("#grant_code"))[0].checked || $(jQuery("#grant_implicit"))[0].checked){
-                                CARBON.showWarningDialog('<fmt:message key="callback.is.required"/>');
-                                return false;
-                            }
-                        } else {
-                            if(!$(jQuery("#grant_code"))[0].checked && !$(jQuery("#grant_implicit"))[0].checked){
-                                document.getElementsByName("callback")[0].value = '';
-                            }
+                    if (version2Checked) {
+                        if (!$(jQuery("#grant_code"))[0].checked && !$(jQuery("#grant_implicit"))[0].checked) {
+                            document.getElementsByName("callback")[0].value = '';
                         }
                     } else {
-                        if(value == ''){
+                        if (value == '') {
                             CARBON.showWarningDialog('<fmt:message key="callback.is.required"/>');
                             return false;
+                        } else if (!isWhiteListed(callbackUrl, "url")) {
+                            CARBON.showWarningDialog('<fmt:message key="callback.is.not.url"/>');
+                            return false;
+
                         }
                     }
                     document.addAppform.submit();
@@ -157,7 +164,7 @@
 		                    <tr id="callback_row">
 		                        <td class="leftCol-small"><fmt:message key='callback'/><span class="required">*</span></td>
                                 <td><input class="text-box-big" id="callback" name="callback" type="text"
-                                           black-list-patterns="http-url"/></td>
+                                           white-list-patterns="https-url"/></td>
 		                    </tr>
 		                     <tr id="grant_row" name="grant_row">
 		                        <td class="leftCol-small"><fmt:message key='grantTypes'/></td>
@@ -230,7 +237,7 @@
                             if (applicationComponentFound) {                            
                             %>
                             <input type="button" class="button"
-                                       onclick="javascript:location.href='../application/configure-service-provider.jsp'"
+                                       onclick="javascript:location.href='../application/configure-service-provider.jsp?spName=<%=Encode.forUriComponent(applicationSPName)%>'"
                                    value="<fmt:message key='cancel'/>"/>
                             <% } else { %>
                                    

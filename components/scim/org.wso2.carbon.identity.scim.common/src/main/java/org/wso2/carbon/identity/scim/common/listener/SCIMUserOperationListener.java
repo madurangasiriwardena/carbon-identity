@@ -27,6 +27,7 @@ import org.wso2.carbon.identity.core.AbstractIdentityUserOperationEventListener;
 import org.wso2.carbon.identity.core.util.IdentityCoreConstants;
 import org.wso2.carbon.identity.scim.common.group.SCIMGroupHandler;
 import org.wso2.carbon.identity.scim.common.utils.IdentitySCIMException;
+import org.wso2.carbon.identity.scim.common.utils.SCIMCommonUtils;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.UserStoreException;
 import org.wso2.carbon.user.core.UserStoreManager;
@@ -126,15 +127,7 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
         if (!isEnable()) {
             return true;
         }
-
-        try {
-            if (!userStoreManager.isSCIMEnabled()) {
-                return true;
-            }
-            claims = this.getSCIMAttributes(userName, claims);
-        } catch (org.wso2.carbon.user.api.UserStoreException e) {
-            throw new UserStoreException(e);
-        }
+        claims = this.getSCIMAttributes(userName, claims);
         return true;
     }
 
@@ -177,12 +170,10 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
 
         //update last-modified-date
         try {
-            if (userStoreManager.isSCIMEnabled()) {
-                Date date = new Date();
-                String lastModifiedDate = AttributeUtil.formatDateTime(date);
-                userStoreManager.setUserClaimValue(
-                        userName, SCIMConstants.META_LAST_MODIFIED_URI, lastModifiedDate, null);
-            }
+            Date date = new Date();
+            String lastModifiedDate = AttributeUtil.formatDateTime(date);
+            userStoreManager.setUserClaimValue(
+                    userName, SCIMConstants.META_LAST_MODIFIED_URI, lastModifiedDate, null);
         } catch (org.wso2.carbon.user.api.UserStoreException e) {
             if (e.getMessage().contains("UserNotFound")) {
                 if (log.isDebugEnabled()) {
@@ -246,12 +237,10 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
         }
         //update last-modified-date and proceed if scim enabled.
         try {
-            if (userStoreManager.isSCIMEnabled()) {
-                Date date = new Date();
-                String lastModifiedDate = AttributeUtil.formatDateTime(date);
-                userStoreManager.setUserClaimValue(
-                        userName, SCIMConstants.META_LAST_MODIFIED_URI, lastModifiedDate, null);
-            }
+            Date date = new Date();
+            String lastModifiedDate = AttributeUtil.formatDateTime(date);
+            userStoreManager.setUserClaimValue(
+                    userName, SCIMConstants.META_LAST_MODIFIED_URI, lastModifiedDate, null);
         } catch (org.wso2.carbon.user.api.UserStoreException e) {
             throw new UserStoreException("Error in retrieving claim values while provisioning " +
                     "'update user' operation.", e);
@@ -310,7 +299,9 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
             if (domainName == null) {
                 domainName = UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME;
             }
-            String roleNameWithDomain = domainName + CarbonConstants.DOMAIN_SEPARATOR + roleName;
+            String roleNameWithDomain = UserCoreUtil.addDomainToName(roleName, domainName);
+            // UserCore Util functionality does not append primary
+            roleNameWithDomain = SCIMCommonUtils.getGroupNameWithDomain(roleNameWithDomain);
 
             //query role name from identity table
             try {
@@ -393,8 +384,8 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
             if (domainName == null) {
                 domainName = UserCoreConstants.PRIMARY_DEFAULT_DOMAIN_NAME;
             }
-            String roleNameWithDomain = domainName + CarbonConstants.DOMAIN_SEPARATOR + roleName;
-            String newRoleNameWithDomain = domainName + CarbonConstants.DOMAIN_SEPARATOR + newRoleName;
+            String roleNameWithDomain = UserCoreUtil.addDomainToName(roleName, domainName);
+            String newRoleNameWithDomain = UserCoreUtil.addDomainToName(newRoleName, domainName);
             try {
                 scimGroupHandler.updateRoleName(roleNameWithDomain, newRoleNameWithDomain);
 

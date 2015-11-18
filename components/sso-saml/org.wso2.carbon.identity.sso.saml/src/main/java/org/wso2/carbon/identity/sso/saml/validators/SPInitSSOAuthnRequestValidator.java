@@ -32,7 +32,7 @@ import org.wso2.carbon.identity.sso.saml.dto.SAMLSSOReqValidationResponseDTO;
 import org.wso2.carbon.identity.sso.saml.util.SAMLSSOUtil;
 
 
-public class SPInitSSOAuthnRequestValidator {
+public class SPInitSSOAuthnRequestValidator implements SSOAuthnRequestValidator{
 
     private static Log log = LogFactory.getLog(SPInitSSOAuthnRequestValidator.class);
     AuthnRequest authnReq;
@@ -81,6 +81,18 @@ public class SPInitSSOAuthnRequestValidator {
                         "Issuer/ProviderName should not be empty in the Authentication Request.",
                         authnReq.getAssertionConsumerServiceURL());
                 log.debug("SAML Request issuer validation failed. Issuer should not be empty");
+                validationResponse.setResponse(errorResp);
+                validationResponse.setValid(false);
+                return validationResponse;
+            }
+
+            if (!SAMLSSOUtil.isSAMLIssuerExists(validationResponse.getIssuer(),
+                                                SAMLSSOUtil.getTenantDomainFromThreadLocal())) {
+                String message = "A Service Provider with the Issuer '" + validationResponse.getIssuer()
+                                 + "' is not registered. Service Provider should be registered in advance";
+                log.error(message);
+                String errorResp = SAMLSSOUtil.buildErrorResponse(SAMLSSOConstants.StatusCodes.REQUESTOR_ERROR,
+                                                                  message, null);
                 validationResponse.setResponse(errorResp);
                 validationResponse.setValid(false);
                 return validationResponse;

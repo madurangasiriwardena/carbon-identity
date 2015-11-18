@@ -143,7 +143,7 @@
    			<script type="text/javascript">
                 function onClickUpdate() {
                     if($(jQuery("#grant_code"))[0].checked || $(jQuery("#grant_implicit"))[0].checked) {
-                        var isValidated = doValidateInputToConfirm(document.getElementById('callback'), "<fmt:message key='callback.is.http'/>",
+                        var isValidated = doValidateInputToConfirm(document.getElementById('callback'), "<fmt:message key='callback.is.not.https'/>",
                                 validate, null, null);
                         if (isValidated) {
                             validate();
@@ -153,28 +153,40 @@
                     }
                 }
                 function validate() {
-                    var value = document.getElementsByName("application")[0].value;
+                    var callbackUrl = document.getElementById('callback').value;
+                    if ($(jQuery("#grant_code"))[0].checked || $(jQuery("#grant_implicit"))[0].checked) {
+                        if (callbackUrl == '') {
+                            CARBON.showWarningDialog('<fmt:message key="callback.is.required"/>');
+                            return false;
+                        } else if (!isWhiteListed(callbackUrl, "url")) {
+                            CARBON.showWarningDialog('<fmt:message key="callback.is.not.url"/>');
+                            return false;
+                        }
+                    }
+                     value = document.getElementsByName("application")[0].value;
                     if (value == '') {
                         CARBON.showWarningDialog('<fmt:message key="application.is.required"/>');
                         return false;
                     }
                     var value = document.getElementsByName("callback")[0].value;
                     var versionValue = document.getElementsByName("oauthVersion")[0].value;
-                    if(versionValue == '<%=OAuthConstants.OAuthVersions.VERSION_2%>') {
-                        if (value == '') {
-                            if($(jQuery("#grant_code"))[0].checked || $(jQuery("#grant_implicit"))[0].checked){
-                                CARBON.showWarningDialog('<fmt:message key="callback.is.required"/>');
-                                return false;
-                            }
+                    if (versionValue == '<%=OAuthConstants.OAuthVersions.VERSION_2%>') {
+                        if (!$(jQuery("#grant_code"))[0].checked && !$(jQuery("#grant_implicit"))[0].checked) {
+                            document.getElementsByName("callback")[0].value = '';
                         } else {
-                            if(!$(jQuery("#grant_code"))[0].checked && !$(jQuery("#grant_implicit"))[0].checked){
-                                document.getElementsByName("callback")[0].value = '';
+                            if (!regexp.test(callbackUrl) || callbackUrl.indexOf(",") > -1) {
+                                CARBON.showWarningDialog("<fmt:message key='callback.is.not.url'/>", null, null);
+                                return false;
                             }
                         }
                     } else {
-                        if(value == ''){
+                        if (value == '') {
                             CARBON.showWarningDialog('<fmt:message key="callback.is.required"/>');
                             return false;
+                        } else if (!isWhiteListed(callbackUrl, "url")) {
+                            CARBON.showWarningDialog('<fmt:message key="callback.is.not.url"/>');
+                            return false;
+
                         }
                     }
                     document.editAppform.submit();
@@ -222,7 +234,7 @@
 		                        <td class="leftCol-small"><fmt:message key='callback'/><span class="required">*</span></td>
                                 <td><input class="text-box-big" id="callback" name="callback"
                                            type="text" value="<%=Encode.forHtmlAttribute(app.getCallbackUrl())%>"
-                                           black-list-patterns="http-url"/></td>
+                                           white-list-patterns="https-url"/></td>
 		                    </tr>
                             <script>
                                 if(<%=app.getOAuthVersion().equals(OAuthConstants.OAuthVersions.VERSION_1A)%> || <%=codeGrant%> || <%=implicitGrant%>){
@@ -322,7 +334,7 @@
                             if (applicationComponentFound) {                            
                             %>
                             <input type="button" class="button"
-                                       onclick="javascript:location.href='../application/configure-service-provider.jsp'"
+                                       onclick="javascript:location.href='../application/configure-service-provider.jsp?spName=<%=Encode.forUriComponent(applicationSPName)%>'"
                                    value="<fmt:message key='cancel'/>"/>
                             <% } else { %>
                                    

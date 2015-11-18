@@ -23,17 +23,23 @@
         <!-- <SkipDBSchemaCreation>false</SkipDBSchemaCreation> -->
         <!--SessionDataPersist>
             <Enable>true</Enable>
-            <EnableCleanUp>true</EnableCleanUp>
-            <Temporary>false</Temporary-->
-        <!--/SessionDataPersist-->
+            <Temporary>false</Temporary>
+            <SessionDataCleanUp>
+                <Enable>true</Enable>
+                <CleanUpTimeout>20160</CleanUpTimeout>
+                <CleanUpPeriod>1140</CleanUpPeriod>
+            </SessionDataCleanUp>
+            <OperationDataCleanUp>
+                <Enable>true</Enable>
+                <CleanUpPeriod>720</CleanUpPeriod>
+            </OperationDataCleanUp>
+        </SessionDataPersist-->
     </JDBCPersistenceManager>
 
     <!-- Time configurations are in minutes -->
     <TimeConfig>
         <SessionIdleTimeout>15</SessionIdleTimeout>
         <RememberMeTimeout>20160</RememberMeTimeout>
-        <PersistanceCleanUpTimeout>20160</PersistanceCleanUpTimeout>
-        <PersistanceCleanUpPeriod>1140</PersistanceCleanUpPeriod>
     </TimeConfig>
 
     <!-- Security configurations -->
@@ -67,16 +73,8 @@
         <OpenIDSkipUserConsent>false</OpenIDSkipUserConsent>
         <!-- Expiry time of the OpenID RememberMe token in minutes -->
         <OpenIDRememberMeExpiry>7200</OpenIDRememberMeExpiry>
-        <!-- Multifactor Authentication configuration -->
-        <UseMultifactorAuthentication>false</UseMultifactorAuthentication>
         <!-- To enable or disable openid dumb mode -->
         <DisableOpenIDDumbMode>false</DisableOpenIDDumbMode>
-        <!-- remember me session timeout in seconds -->
-        <SessionTimeout>36000</SessionTimeout>
-        <!-- skips authentication if valid SAML2 Web SSO browser session available -->
-        <AcceptSAMLSSOLogin>false</AcceptSAMLSSOLogin>
-        <ClaimsRetrieverImplClass>org.wso2.carbon.identity.provider.openid.claims.DefaultClaimsRetriever
-        </ClaimsRetrieverImplClass>
 
         <!--
                OpenID private association store is configurable from following configs.
@@ -166,6 +164,14 @@
             <SupportedResponseType>
                 <ResponseTypeName>code</ResponseTypeName>
                 <ResponseTypeHandlerImplClass>org.wso2.carbon.identity.oauth2.authz.handlers.CodeResponseTypeHandler</ResponseTypeHandlerImplClass>
+            </SupportedResponseType>
+            <SupportedResponseType>
+                <ResponseTypeName>id_token</ResponseTypeName>
+                <ResponseTypeHandlerImplClass>org.wso2.carbon.identity.oauth2.authz.handlers.TokenResponseTypeHandler</ResponseTypeHandlerImplClass>
+            </SupportedResponseType>
+            <SupportedResponseType>
+                <ResponseTypeName>id_token token</ResponseTypeName>
+                <ResponseTypeHandlerImplClass>org.wso2.carbon.identity.oauth2.authz.handlers.TokenResponseTypeHandler</ResponseTypeHandlerImplClass>
             </SupportedResponseType>
         </SupportedResponseTypes>
         <!-- Supported Grant Types -->
@@ -276,13 +282,7 @@
         <SingleLogoutRetryInterval>60000</SingleLogoutRetryInterval>
         <!-- in milli seconds -->
         <TenantPartitioningEnabled>false</TenantPartitioningEnabled>
-        <SessionTimeout>36000</SessionTimeout>
-        <!-- remember me session timeout in seconds -->
-        <!-- skips authentication if valid SAML2 Web SSO browser session available -->
-        <AttributeStatementBuilder>org.wso2.carbon.identity.sso.saml.attributes.UserAttributeStatementBuilder</AttributeStatementBuilder>
         <AttributesClaimDialect>http://wso2.org/claims</AttributesClaimDialect>
-        <AcceptOpenIDLogin>false</AcceptOpenIDLogin>
-        <ClaimsRetrieverImplClass>org.wso2.carbon.identity.sso.saml.builders.claims.DefaultClaimsRetriever</ClaimsRetrieverImplClass>
         <SAMLSSOAssertionBuilder>org.wso2.carbon.identity.sso.saml.builders.assertion.DefaultSAMLAssertionBuilder</SAMLSSOAssertionBuilder>
         <SAMLSSOEncrypter>org.wso2.carbon.identity.sso.saml.builders.encryption.DefaultSSOEncrypter</SAMLSSOEncrypter>
         <SAMLSSOSigner>org.wso2.carbon.identity.sso.saml.builders.signature.DefaultSSOSigner</SAMLSSOSigner>

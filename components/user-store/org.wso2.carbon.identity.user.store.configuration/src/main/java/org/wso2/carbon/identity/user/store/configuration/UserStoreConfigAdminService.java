@@ -26,6 +26,7 @@ import org.w3c.dom.NodeList;
 import org.wso2.carbon.context.CarbonContext;
 import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.core.AbstractAdmin;
+import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.user.store.configuration.beans.RandomPassword;
 import org.wso2.carbon.identity.user.store.configuration.beans.RandomPasswordContainer;
 import org.wso2.carbon.identity.user.store.configuration.cache.RandomPasswordContainerCache;
@@ -58,6 +59,7 @@ import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 import org.xml.sax.SAXException;
 
+import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -261,6 +263,7 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
         // This is a redundant check
         if (userStoreConfigFile.exists()) {
             String errorMessage = "Cannot add user store " + domainName + ". User store already exists.";
+            log.error(errorMessage);
             throw new IdentityUserStoreMgtException(errorMessage);
         }
 
@@ -331,7 +334,8 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
      * @throws TransformerException
      * @throws ParserConfigurationException
      */
-    public void editUserStoreWithDomainName(String previousDomainName, UserStoreDTO userStoreDTO) throws IdentityUserStoreMgtException{
+    public void editUserStoreWithDomainName(String previousDomainName, UserStoreDTO userStoreDTO)
+            throws IdentityUserStoreMgtException{
         boolean isDebugEnabled = log.isDebugEnabled();
         String domainName = userStoreDTO.getDomainId();
         if (isDebugEnabled) {
@@ -343,6 +347,18 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
 
         String fileName = domainName.replace(".", "_");
         String previousFileName = previousDomainName.replace(".", "_");
+
+        if(!IdentityUtil.isValidFileName(fileName)){
+            String message = "Provided domain name : '" + domainName + "' is invalid.";
+            log.error(message);
+            throw new IdentityUserStoreMgtException(message);
+        }
+
+        if(!IdentityUtil.isValidFileName(previousFileName)){
+            String message = "Provided domain name : '" + previousDomainName + "' is invalid.";
+            log.error(message);
+            throw new IdentityUserStoreMgtException(message);
+        }
 
         int tenantId = CarbonContext.getThreadLocalCarbonContext().getTenantId();
 
@@ -495,7 +511,7 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
     }
 
     private boolean validateDomainsForDelete(String[] domains) {
-        String userDomain = UserCoreUtil.extractDomainFromName(PrivilegedCarbonContext.getThreadLocalCarbonContext()
+        String userDomain = IdentityUtil.extractDomainFromName(PrivilegedCarbonContext.getThreadLocalCarbonContext()
                 .getUsername());
         for (String domain : domains) {
             if (domain.equalsIgnoreCase(userDomain)) {
@@ -589,7 +605,13 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
     }
 
 
-    private void deleteFile(File file, final String userStoreName) {
+    private void deleteFile(File file, final String userStoreName) throws IdentityUserStoreMgtException {
+        if(!IdentityUtil.isValidFileName(userStoreName)) {
+            String message = "Provided domain name : '" + userStoreName + "' is invalid.";
+            log.error(message);
+            throw new IdentityUserStoreMgtException(message);
+        }
+
         File[] deleteCandidates = file.listFiles(new FilenameFilter() {
             public boolean accept(File dir, String name) {
                 return name.equalsIgnoreCase(userStoreName);
@@ -610,7 +632,20 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
      * @param domain:   Name of the domain to be updated
      * @param isDisable : Whether to disable/enable domain(true/false)
      */
-    public void changeUserStoreState(String domain, Boolean isDisable) throws IdentityUserStoreMgtException{
+    public void changeUserStoreState(String domain, Boolean isDisable) throws IdentityUserStoreMgtException,
+                                                                              TransformerConfigurationException {
+
+        String currentAuthorizedUserName = CarbonContext.getThreadLocalCarbonContext().getUsername();
+        int index = currentAuthorizedUserName.indexOf(UserCoreConstants.DOMAIN_SEPARATOR);
+        String currentUserDomain = null;
+        if (index > 0) {
+            currentUserDomain = currentAuthorizedUserName.substring(0, index);
+        }
+
+        if (currentUserDomain != null && currentUserDomain.equalsIgnoreCase(domain) && isDisable) {
+            log.error("Error while disabling user store from a user who is in the same user store.");
+            throw new IdentityUserStoreMgtException("Error while updating user store state.");
+        }
 
         File userStoreConfigFile = createConfigurationFile(domain);
         StreamResult result = new StreamResult(userStoreConfigFile);
@@ -622,6 +657,7 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
         DocumentBuilderFactory documentFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder documentBuilder = null;
         try {
+            documentFactory.setFeature(UserStoreConfigurationConstant.EXTERNAL_GENERAL_ENTITIES_URI, false);
             documentBuilder = documentFactory.newDocumentBuilder();
             Document doc = documentBuilder.parse(userStoreConfigFile);
 
@@ -637,6 +673,7 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
             DOMSource source = new DOMSource(doc);
 
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            transformerFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             Transformer transformer = transformerFactory.newTransformer();
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
@@ -647,19 +684,7 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
             if (log.isDebugEnabled()) {
                 log.debug("New state :" + isDisable + " of the user store \'" + domain + "\' successfully written to the file system");
             }
-        } catch (ParserConfigurationException e) {
-            log.error(e.getMessage(),e);
-            throw new IdentityUserStoreMgtException("Error while updating user store state",e);
-        } catch (SAXException e) {
-            log.error(e.getMessage(),e);
-            throw new IdentityUserStoreMgtException("Error while updating user store state",e);
-        } catch (TransformerConfigurationException e) {
-            log.error(e.getMessage(),e);
-            throw new IdentityUserStoreMgtException("Error while updating user store state",e);
-        } catch (TransformerException e) {
-            log.error(e.getMessage(),e);
-            throw new IdentityUserStoreMgtException("Error while updating user store state",e);
-        } catch (IOException e) {
+        } catch (ParserConfigurationException | SAXException | TransformerException | IOException e) {
             log.error(e.getMessage(),e);
             throw new IdentityUserStoreMgtException("Error while updating user store state",e);
         }
@@ -729,8 +754,15 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
         }
     }
 
-    private File createConfigurationFile(String domainName) {
+    private File createConfigurationFile(String domainName) throws IdentityUserStoreMgtException {
         String fileName = domainName.replace(".", "_");
+
+        if(!IdentityUtil.isValidFileName(fileName)){
+            String message = "Provided domain name : '" + domainName + "' is invalid.";
+            log.error(message);
+            throw new IdentityUserStoreMgtException(message);
+        }
+
         File userStoreConfigFile;
         int tenantId = CarbonContext.getThreadLocalCarbonContext().getTenantId();
 
@@ -787,6 +819,7 @@ public class UserStoreConfigAdminService extends AbstractAdmin {
             DOMSource source = new DOMSource(doc);
 
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
+
             Transformer transformer = transformerFactory.newTransformer();
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
